@@ -1,0 +1,9 @@
+opencv-python>=4.5
+mediapipe>=0.10.0
+torch>=1.12
+torchvision
+numpy
+pandas
+scikit-learn
+joblib
+tqdm
