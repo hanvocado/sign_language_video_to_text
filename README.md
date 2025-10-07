@@ -3,6 +3,7 @@
 **Mục tiêu:** xây dựng pipeline chuyển video -> landmark (.npy) -> huấn luyện LSTM nhận diện ký hiệu (face + hands) -> inference realtime.
 
 ## Cấu trúc project
+
 ```
 sign-language-recognition/
 ├── data/
@@ -18,7 +19,8 @@ sign-language-recognition/
 ```
 
 ## Các script chính (với mô tả nhanh)
-- `src/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (face + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate).
+
+- `src/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (pose + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate).
 - `src/split_dataset.py`: duyệt `data/npy/*/*.npy` và sinh `train.csv`, `val.csv`, `test.csv` theo tỷ lệ (mặc định 70/15/15).
 - `src/preprocessing.py`: gộp index, tạo scaler (StandardScaler) cho features (tùy chọn).
 - `src/data_loader.py`: `SignLanguageDataset` là PyTorch Dataset đọc `.npy` theo index csv.
@@ -29,7 +31,9 @@ sign-language-recognition/
 - `src/visualize_keypoints.py`: vẽ face+hands landmarks lên video (dùng để kiểm tra extraction).
 
 ## Quick start (example)
+
 1. Cài dependencies:
+
    ```bash
    python -m venv venv
    source venv/bin/activate   # Windows: venv\Scripts\activate
@@ -37,20 +41,23 @@ sign-language-recognition/
    ```
 
 2. Thu thập video
+
 - Đặt video gốc vào `data/raw_unprocessed/<label>/`.
 - Mỗi `<label>` là một class (ví dụ: `hello`, `thanks`, ...).
 - Mỗi clip chỉ nên chứa 1 ký hiệu, thời lượng 2–5 giây.
 
 3. Chuẩn hóa video
-Dùng script `preprocess_videos.py` để:
+   Dùng script `preprocess_videos.py` để:
+
 - Đưa video về **30fps, 1280×720 (16:9)**.
+- **Pixel value normalization** về range [0,1] sử dụng min-max normalization.
 - Tùy chọn cắt thành nhiều clip (≤5 giây).
 
-   ```bash
-   python src/preprocess_videos.py --input_dir data/raw_unprocessed --output_dir data/raw --fps 30 --width 1280 --height 720 --max_duration 5
-   ```
+  ```bash
+  python src/preprocess_videos.py --input_dir data/raw_unprocessed --output_dir data/raw --fps 30 --width 1280 --height 720 --max_duration 5
+  ```
 
-4. Convert tất cả video sang npy (face+hands, seq_len=64 mặc định):
+4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
    ```bash
    python src/video2npy.py --input_dir data/raw --output_dir data/npy --seq_len 64
    ```
@@ -76,9 +83,12 @@ Dùng script `preprocess_videos.py` để:
    ```
 
 ## Ghi chú kỹ thuật
-- Feature vector hiện tại: **face (468*3) + left hand (21*3) + right hand (21*3) = 1530** chiều.
-- Tất cả file `.npy` được lưu dạng `(seq_len, 1530)`.
+
+- Feature vector hiện tại: **pose (33*3) + left hand (21*3) + right hand (21\*3) = 225** chiều.
+- Tất cả file `.npy` được lưu dạng `(seq_len, 225)`.
+- Coordinate normalization sử dụng wrist joints làm reference point theo công thức: L̂_t = (L_t - L_ref) / ||L_max - L_min||
 - `train.py` lưu `label_map.json` (list labels theo thứ tự index) trong folder checkpoint để inference tải lại mapping.
 
 ## Mở rộng
+
 - script augment keypoints, - export ONNX cho inference CPU nhẹ hơn.

@@ -22,15 +22,25 @@ mp_holistic = mp.solutions.holistic
 
 def extract_keypoints(results):
     """
-    Trả về vector (1530,) gồm face + left hand + right hand.
+    Trả về vector gồm pose + left hand + right hand (không bao gồm face).
     Nếu part không có thì điền 0.
     """
-    face, lh, rh = [], [], []
-    if results.face_landmarks:
-        for lm in results.face_landmarks.landmark:
-            face.extend([lm.x, lm.y, lm.z])
+    # Comment face extraction - chỉ lấy pose và hands
+    # face, lh, rh = [], [], []
+    # if results.face_landmarks:
+    #     for lm in results.face_landmarks.landmark:
+    #         face.extend([lm.x, lm.y, lm.z])
+    # else:
+    #     face = [0.0] * 468 * 3
+    
+    pose, lh, rh = [], [], []
+    
+    # Extract pose landmarks (33 landmarks * 3 coordinates = 99 features)
+    if results.pose_landmarks:
+        for lm in results.pose_landmarks.landmark:
+            pose.extend([lm.x, lm.y, lm.z])
     else:
-        face = [0.0] * 468 * 3
+        pose = [0.0] * 33 * 3
 
     if results.left_hand_landmarks:
         for lm in results.left_hand_landmarks.landmark:
@@ -44,35 +54,50 @@ def extract_keypoints(results):
     else:
         rh = [0.0] * 21 * 3
 
-    return np.array(face + lh + rh, dtype=np.float32)
+    return np.array(pose + lh + rh, dtype=np.float32)
 
 
-def normalize_keypoints(seq, anchor_idx=1, scale_idx=(11, 12)):
+def normalize_keypoints(seq, wrist_left_idx=15, wrist_right_idx=16):
     """
-    Chuẩn hóa keypoints trong một sequence.
-    - anchor_idx: landmark làm gốc (1 = nose trong pose landmarks của MediaPipe).
-    - scale_idx: cặp landmark để tính scale (11 = left_shoulder, 12 = right_shoulder).
-
-    seq: numpy (seq_len, 1530)
+    Chuẩn hóa keypoints:
+    - Sử dụng wrist joints làm reference point (pose landmarks 15, 16)
+    - Áp dụng công thức: L̂_t = (L_t - L_ref) / ||L_max - L_min||
+    
+    seq: numpy (seq_len, 225) - pose(99) + left_hand(63) + right_hand(63)
     """
     num_landmarks = seq.shape[1] // 3
     seq3d = seq.reshape(seq.shape[0], num_landmarks, 3)  # (seq, N, 3)
-
-    # Nếu anchor (mũi) không có (toàn 0) thì bỏ qua normalize
-    if np.all(seq3d[:, anchor_idx, :2] == 0):
-        return seq
-
-    # Dịch toàn bộ keypoints sao cho anchor (nose) = (0,0)
-    anchor = seq3d[:, anchor_idx, :2]  # (seq,2)
-    seq3d[:, :, 0] -= anchor[:, 0].reshape(-1, 1)
-    seq3d[:, :, 1] -= anchor[:, 1].reshape(-1, 1)
-
-    # Tính scale = khoảng cách giữa 2 vai
-    p1, p2 = seq3d[:, scale_idx[0], :2], seq3d[:, scale_idx[1], :2]
-    scale = np.linalg.norm(p1 - p2, axis=1).reshape(-1, 1)
+    
+    # Tìm wrist reference points (pose landmarks 15, 16)
+    # Nếu không có pose landmarks, sử dụng center của bounding box
+    if np.all(seq3d[:, wrist_left_idx, :2] == 0) and np.all(seq3d[:, wrist_right_idx, :2] == 0):
+        # Fallback: sử dụng center của tất cả landmarks
+        center = np.mean(seq3d[:, :, :2], axis=1, keepdims=True)
+        ref_point = center
+    else:
+        # Sử dụng trung bình của 2 wrist points
+        wrist_left = seq3d[:, wrist_left_idx, :2]
+        wrist_right = seq3d[:, wrist_right_idx, :2]
+        ref_point = (wrist_left + wrist_right) / 2
+        ref_point = ref_point.reshape(-1, 1, 2)
+    
+    # Translation normalization: dịch về gốc tọa độ
+    seq3d[:, :, 0] -= ref_point[:, 0, 0].reshape(-1, 1)
+    seq3d[:, :, 1] -= ref_point[:, 0, 1].reshape(-1, 1)
+    
+    # Scale normalization: tính khoảng cách cực đại
+    # Tìm min/max coordinates trong mỗi frame
+    min_coords = np.min(seq3d[:, :, :2], axis=1)  # (seq, 2)
+    max_coords = np.max(seq3d[:, :, :2], axis=1)  # (seq, 2)
+    scale = np.linalg.norm(max_coords - min_coords, axis=1)  # (seq,)
+    
+    # Tránh chia cho 0
     scale[scale == 0] = 1.0
+    scale = scale.reshape(-1, 1, 1)
+    
+    # Áp dụng scale normalization
     seq3d[:, :, :2] /= scale
-
+    
     return seq3d.reshape(seq.shape[0], -1).astype(np.float32)
 
 
@@ -95,7 +120,8 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=Tru
 
     if len(seq) == 0:
         print(f"⚠️ Warning: No keypoints extracted from {video_path}")
-        seq = [np.zeros(1530, dtype=np.float32) for _ in range(seq_len)]
+        # Updated feature dimension: pose(99) + left_hand(63) + right_hand(63) = 225
+        seq = [np.zeros(225, dtype=np.float32) for _ in range(seq_len)]
 
     arr = np.stack(seq, axis=0).astype(np.float32)
 

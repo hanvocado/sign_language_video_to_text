@@ -44,6 +44,7 @@ if __name__ == '__main__':
     p.add_argument('--scaler', default=None)
     p.add_argument('--seq_len', type=int, default=64)
     p.add_argument('--batch_size', type=int, default=32)
-    p.add_argument('--input_dim', type=int, default=1530)
+    # p.add_argument('--input_dim', type=int, default=1530)
+    p.add_argument('--input_dim', type=int, default=225)
     args = p.parse_args()
     evaluate(args)
