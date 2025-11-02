@@ -2,11 +2,13 @@
 Preprocess raw sign language videos:
 - Convert fps -> 30
 - Resize to 1280x720 (16:9)
+- Pixel value normalization to [0, 1] range using min-max normalization
 - Optionally split long videos into smaller clips (2-5s)
 """
 
 import os
 import cv2
+import numpy as np
 from pathlib import Path
 import argparse
 
@@ -35,6 +37,18 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720, ma
 
         # resize
         frame = cv2.resize(frame, (width, height))
+        
+        # Pixel value normalization to [0, 1] range
+        # Formula: I'_t = (I_t - min(I_t)) / (max(I_t) - min(I_t))
+        frame_min = frame.min()
+        frame_max = frame.max()
+        if frame_max > frame_min:  # Avoid division by zero
+            frame = (frame - frame_min) / (frame_max - frame_min)
+        else:
+            frame = frame.astype(np.float32) / 255.0  # Fallback to standard normalization
+        
+        # Convert back to uint8 for video writing
+        frame = (frame * 255).astype(np.uint8)
 
         # init writer cho segment mới
         if frame_idx % segment_len == 0:

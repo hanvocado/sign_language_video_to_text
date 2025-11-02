@@ -14,7 +14,11 @@ for p in [DATA_DIR, RAW_DIR, NPY_DIR, SPLIT_DIR, MODEL_DIR, CKPT_DIR]:
     os.makedirs(p, exist_ok=True)
 
 # Feature dimensions after extracting Face(468*3) + LHand(21*3) + RHand(21*3)
-FEATURE_DIM = 1530
+# FEATURE_DIM = 1530
+
+# Feature dimensions after extracting Pose(33*3) + LHand(21*3) + RHand(21*3)
+# Updated: removed face landmarks, added pose landmarks
+FEATURE_DIM = 225  # 99 + 63 + 63 = 225
 SEQ_LEN = 64
 BATCH_SIZE = 32
 LR = 1e-3

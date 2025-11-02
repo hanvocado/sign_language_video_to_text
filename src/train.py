@@ -89,7 +89,7 @@ if __name__ == '__main__':
     p.add_argument('--val_csv', default='data/splits/val.csv')
     p.add_argument('--scaler', default=None, help='Optional scaler.joblib to normalize frames')
     p.add_argument('--seq_len', type=int, default=SEQ_LEN)
-    p.add_argument('--input_dim', type=int, default=1530)
+    p.add_argument('--input_dim', type=int, default=225)
     p.add_argument('--hidden_dim', type=int, default=256)
     p.add_argument('--num_layers', type=int, default=2)
     p.add_argument('--dropout', type=float, default=0.3)

@@ -17,8 +17,14 @@ def visualize_video(path):
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = holistic.process(image)
             annotated = frame.copy()
-            if results.face_landmarks:
-                mp.solutions.drawing_utils.draw_landmarks(annotated, results.face_landmarks, mp.solutions.holistic.FACEMESH_TESSELATION)
+            # Comment face visualization - chỉ hiển thị pose và hands
+            # if results.face_landmarks:
+            #     mp.solutions.drawing_utils.draw_landmarks(annotated, results.face_landmarks, mp.solutions.holistic.FACEMESH_TESSELATION)
+            
+            # Draw pose landmarks
+            if results.pose_landmarks:
+                mp.solutions.drawing_utils.draw_landmarks(annotated, results.pose_landmarks, mp.solutions.holistic.POSE_CONNECTIONS)
+                
             if results.left_hand_landmarks:
                 mp.solutions.drawing_utils.draw_landmarks(annotated, results.left_hand_landmarks, mp.solutions.holistic.HAND_CONNECTIONS)
             if results.right_hand_landmarks:

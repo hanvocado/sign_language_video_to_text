@@ -17,12 +17,26 @@ import mediapipe as mp
 mp_holistic = mp.solutions.holistic
 
 def extract_keypoints(results):
-    face, lh, rh = [], [], []
-    if results.face_landmarks:
-        for lm in results.face_landmarks.landmark:
-            face.extend([lm.x, lm.y, lm.z])
+    """
+    Trả về vector gồm pose + left hand + right hand (không bao gồm face).
+    """
+    # Comment face extraction - chỉ lấy pose và hands
+    # face, lh, rh = [], [], []
+    # if results.face_landmarks:
+    #     for lm in results.face_landmarks.landmark:
+    #         face.extend([lm.x, lm.y, lm.z])
+    # else:
+    #     face = [0.0] * 468 * 3
+    
+    pose, lh, rh = [], [], []
+    
+    # Extract pose landmarks (33 landmarks * 3 coordinates = 99 features)
+    if results.pose_landmarks:
+        for lm in results.pose_landmarks.landmark:
+            pose.extend([lm.x, lm.y, lm.z])
     else:
-        face = [0.0] * 468 * 3
+        pose = [0.0] * 33 * 3
+        
     if results.left_hand_landmarks:
         for lm in results.left_hand_landmarks.landmark:
             lh.extend([lm.x, lm.y, lm.z])
@@ -33,7 +47,7 @@ def extract_keypoints(results):
             rh.extend([lm.x, lm.y, lm.z])
     else:
         rh = [0.0] * 21 * 3
-    return np.array(face + lh + rh, dtype=np.float32)
+    return np.array(pose + lh + rh, dtype=np.float32)
 
 def realtime(args):
     label_list = load_label_map(args.label_map)
@@ -79,7 +93,8 @@ if __name__ == '__main__':
     p.add_argument('--ckpt', required=True)
     p.add_argument('--label_map', required=True)
     p.add_argument('--seq_len', type=int, default=64)
-    p.add_argument('--input_dim', type=int, default=1530)
+    # p.add_argument('--input_dim', type=int, default=1530)
+    p.add_argument('--input_dim', type=int, default=225)
     p.add_argument('--camera_id', type=int, default=0)
     args = p.parse_args()
     realtime(args)
