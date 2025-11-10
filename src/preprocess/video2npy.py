@@ -8,12 +8,6 @@ Chuẩn hóa:
 
 import os, cv2, numpy as np, argparse, sys
 from pathlib import Path
-
-# ensure project root is on sys.path
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
-
 import mediapipe as mp
 from src.config.config import SEQ_LEN
 

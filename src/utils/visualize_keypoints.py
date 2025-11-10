@@ -1,8 +1,5 @@
 """Lightweight visualization of face+hands landmarks on a video file or webcam."""
 import os, sys, argparse
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 import cv2, mediapipe as mp
 mp_holistic = mp.solutions.holistic
 

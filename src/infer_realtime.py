@@ -1,13 +1,6 @@
-"""Realtime inference from webcam using saved checkpoint and label_map.
-
-Usage:
-    python src/infer_realtime.py --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
-"""
+"""Realtime inference from webcam using saved checkpoint and label_map."""
 import os, sys, argparse, time
 from collections import deque
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 import cv2, numpy as np, torch
 from src.utils import load_label_map, load_checkpoint
 from src.model import build_model

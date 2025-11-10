@@ -1,9 +1,6 @@
 """Utilities to gather dataset index and compute scaler for normalization."""
 import os, pandas as pd, numpy as np, joblib, argparse, sys
 from pathlib import Path
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 from src.config.config import NPY_DIR
 from sklearn.preprocessing import StandardScaler
 
