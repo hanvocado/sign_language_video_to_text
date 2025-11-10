@@ -15,7 +15,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 import mediapipe as mp
-from src.config import SEQ_LEN
+from src.config.config import SEQ_LEN
 
 mp_holistic = mp.solutions.holistic
 

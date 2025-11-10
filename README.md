@@ -54,28 +54,28 @@ sign-language-recognition/
 - **Pixel value normalization** về range [0,1] sử dụng min-max normalization.
 
   ```bash
-  python src/preprocess_video.py --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
+  python src/preprocess/preprocess_video.py --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
   ```
 
 4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
    ```bash
-   python src/video2npy.py --input_dir data/raw --output_dir data/npy --seq_len 64
+   python src/preprocess/video2npy.py --input_dir data/raw --output_dir data/npy --seq_len 64
    ```
 5. Sinh split index:
    ```bash
-   python src/split_dataset.py --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
+   python src/preprocess/split_dataset.py --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
    ```
 6. (Tùy chọn) tạo scaler (fit StandardScaler trên các frame trung bình):
    ```bash
-   python src/preprocessing.py --index_csv data/splits/train.csv --scaler_path models/checkpoints/scaler.joblib
+   python src/preprocess/preprocessing.py --index_csv data/splits/train.csv --scaler_path models/checkpoints/scaler.joblib
    ```
 7. Huấn luyện:
    ```bash
-   python src/train.py --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
+   python src/model/train.py --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
    ```
 8. Đánh giá:
    ```bash
-   python src/eval.py --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth
+   python src/model/eval.py --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth
    ```
 9. Realtime inference:
    ```bash
@@ -88,7 +88,3 @@ sign-language-recognition/
 - Tất cả file `.npy` được lưu dạng `(seq_len, 225)`.
 - Coordinate normalization sử dụng wrist joints làm reference point theo công thức: L̂_t = (L_t - L_ref) / ||L_max - L_min||
 - `train.py` lưu `label_map.json` (list labels theo thứ tự index) trong folder checkpoint để inference tải lại mapping.
-
-## Mở rộng
-
-- script augment keypoints, - export ONNX cho inference CPU nhẹ hơn.

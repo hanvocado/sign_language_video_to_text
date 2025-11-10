@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
-from src.config import NPY_DIR
+from src.config.config import NPY_DIR
 from sklearn.preprocessing import StandardScaler
 
 def gather_index(npy_dir=NPY_DIR, out_csv='data/splits/dataset_index.csv'):
