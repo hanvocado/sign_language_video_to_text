@@ -50,11 +50,11 @@ sign-language-recognition/
    Dùng script `preprocess_videos.py` để:
 
 - Đưa video về **30fps, 1280×720 (16:9)**.
+- Tự động phát hiện chuyển động và cắt video.
 - **Pixel value normalization** về range [0,1] sử dụng min-max normalization.
-- Tùy chọn cắt thành nhiều clip (≤5 giây).
 
   ```bash
-  python src/preprocess_videos.py --input_dir data/raw_unprocessed --output_dir data/raw --fps 30 --width 1280 --height 720 --max_duration 5
+  python src/preprocess_video.py --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
   ```
 
 4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
