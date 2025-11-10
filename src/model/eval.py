@@ -1,12 +1,5 @@
-"""Evaluate a trained checkpoint on a CSV index file (test set).
-
-Usage:
-    python src/eval.py --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
-"""
+"""Evaluate a trained checkpoint on a CSV index file (test set)."""
 import os, sys, argparse
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 import torch
 from src.model.data_loader import SignLanguageDataset
 from torch.utils.data import DataLoader

@@ -71,11 +71,11 @@ sign-language-recognition/
    ```
 7. Huấn luyện:
    ```bash
-   python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
+   python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 50
    ```
 8. Đánh giá:
    ```bash
-   python -m src.model.eval --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth
+   python -m src.model.eval --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
    ```
 9. Realtime inference:
    ```bash

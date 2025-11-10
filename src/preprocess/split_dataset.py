@@ -1,14 +1,6 @@
-"""Split dataset of .npy files into train/val/test csv indexes.
-
-Usage:
-    python src/split_dataset.py --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
-"""
+"""Split dataset of .npy files into train/val/test csv indexes."""
 import os, glob, argparse, pandas as pd, random, sys
 from pathlib import Path
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 
 def split_dataset(data_dir, output_dir, train_ratio=0.7, val_ratio=0.15, seed=42):
     rows = []
