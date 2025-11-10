@@ -20,15 +20,15 @@ sign-language-recognition/
 
 ## Các script chính (với mô tả nhanh)
 
-- `src/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (pose + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate).
-- `src/split_dataset.py`: duyệt `data/npy/*/*.npy` và sinh `train.csv`, `val.csv`, `test.csv` theo tỷ lệ (mặc định 70/15/15).
-- `src/preprocessing.py`: gộp index, tạo scaler (StandardScaler) cho features (tùy chọn).
-- `src/data_loader.py`: `SignLanguageDataset` là PyTorch Dataset đọc `.npy` theo index csv.
-- `src/model.py`: kiến trúc `LSTMClassifier` (stacked LSTM -> linear).
-- `src/train.py`: huấn luyện mô hình, lưu checkpoint tốt nhất, lưu `label_map.json` (list labels in order) và (nếu có) scaler.joblib.
-- `src/eval.py`: đánh giá trên `test.csv` và in classification report + confusion matrix.
+- `src/preprocess/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (pose + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate).
+- `src/preprocess/split_dataset.py`: duyệt `data/npy/*/*.npy` và sinh `train.csv`, `val.csv`, `test.csv` theo tỷ lệ (mặc định 70/15/15).
+- `src/preprocess/preprocessing.py`: gộp index, tạo scaler (StandardScaler) cho features (tùy chọn).
+- `src/model/data_loader.py`: `SignLanguageDataset` là PyTorch Dataset đọc `.npy` theo index csv.
+- `src/model/model.py`: kiến trúc `LSTMClassifier` (stacked LSTM -> linear).
+- `src/model/train.py`: huấn luyện mô hình, lưu checkpoint tốt nhất, lưu `label_map.json` (list labels in order) và (nếu có) scaler.joblib.
+- `src/model/eval.py`: đánh giá trên `test.csv` và in classification report + confusion matrix.
 - `src/infer_realtime.py`: chạy webcam realtime, trích xuất keypoints, giữ sliding window `seq_len` và dự đoán nhãn, hiển thị trên màn hình.
-- `src/visualize_keypoints.py`: vẽ face+hands landmarks lên video (dùng để kiểm tra extraction).
+- `src/utils/visualize_keypoints.py`: vẽ face+hands landmarks lên video (dùng để kiểm tra extraction).
 
 ## Quick start (example)
 
@@ -54,32 +54,32 @@ sign-language-recognition/
 - **Pixel value normalization** về range [0,1] sử dụng min-max normalization.
 
   ```bash
-  python src/preprocess/preprocess_video.py --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
+  python -m src.preprocess.preprocess_video --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
   ```
 
 4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
    ```bash
-   python src/preprocess/video2npy.py --input_dir data/raw --output_dir data/npy --seq_len 64
+   python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --seq_len 64
    ```
 5. Sinh split index:
    ```bash
-   python src/preprocess/split_dataset.py --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
+   python -m src.preprocess.split_dataset --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
    ```
 6. (Tùy chọn) tạo scaler (fit StandardScaler trên các frame trung bình):
    ```bash
-   python src/preprocess/preprocessing.py --index_csv data/splits/train.csv --scaler_path models/checkpoints/scaler.joblib
+   python -m src.preprocess.preprocessing --index_csv data/splits/train.csv --scaler_path models/checkpoints/scaler.joblib
    ```
 7. Huấn luyện:
    ```bash
-   python src/model/train.py --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
+   python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
    ```
 8. Đánh giá:
    ```bash
-   python src/model/eval.py --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth
+   python -m src.model.eval --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth
    ```
 9. Realtime inference:
    ```bash
-   python src/infer_realtime.py --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
+   python -m src.infer_realtime --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
    ```
 
 ## Ghi chú kỹ thuật
