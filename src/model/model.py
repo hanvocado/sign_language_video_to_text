@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from src.config import FEATURE_DIM
+from src.config.config import FEATURE_DIM
 
 class LSTMClassifier(nn.Module):
     def __init__(self, input_dim, hidden_dim=256, num_layers=2, num_classes=10, dropout=0.3, bidirectional=False):

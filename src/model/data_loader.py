@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
-from src.config import SEQ_LEN
+from src.config.config import SEQ_LEN
 from sklearn.preprocessing import LabelEncoder
 import joblib
 

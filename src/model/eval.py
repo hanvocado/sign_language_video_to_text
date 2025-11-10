@@ -8,11 +8,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 import torch
-from src.data_loader import SignLanguageDataset
+from src.model.data_loader import SignLanguageDataset
 from torch.utils.data import DataLoader
-from src.model import build_model
-from src.utils import load_label_map, load_checkpoint
-from src.config import DEVICE
+from src.model.model import build_model
+from src.utils.utils import load_label_map, load_checkpoint
+from src.config.config import DEVICE
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 

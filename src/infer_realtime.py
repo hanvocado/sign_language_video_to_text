@@ -11,7 +11,7 @@ if ROOT not in sys.path:
 import cv2, numpy as np, torch
 from src.utils import load_label_map, load_checkpoint
 from src.model import build_model
-from src.config import DEVICE
+from src.config.config import DEVICE
 import mediapipe as mp
 
 mp_holistic = mp.solutions.holistic

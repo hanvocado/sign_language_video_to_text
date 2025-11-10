@@ -9,10 +9,10 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 import torch, torch.nn as nn, torch.optim as optim
 from torch.utils.data import DataLoader
-from src.config import DEVICE, CKPT_DIR, BATCH_SIZE, LR, EPOCHS, SEQ_LEN
-from src.data_loader import SignLanguageDataset
-from src.model import build_model
-from src.utils import save_checkpoint, save_label_map, ensure_dir
+from src.config.config import DEVICE, CKPT_DIR, BATCH_SIZE, LR, EPOCHS, SEQ_LEN
+from src.model.data_loader import SignLanguageDataset
+from src.model.model import build_model
+from src.utils.utils import save_checkpoint, save_label_map, ensure_dir
 import numpy as np
 from sklearn.metrics import accuracy_score
 import json
