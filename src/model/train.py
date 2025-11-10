@@ -1,10 +1,10 @@
 """Training script for LSTM-based sign recognition.
 
 Usage example:
-    python src/train.py --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
+    python src/model/train.py --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 30
 """
 import os, sys, argparse, time
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 import torch, torch.nn as nn, torch.optim as optim
