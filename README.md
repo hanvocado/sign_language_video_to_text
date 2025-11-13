@@ -20,7 +20,7 @@ sign-language-recognition/
 
 ## Các script chính (với mô tả nhanh)
 
-- `src/preprocess/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (pose + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate).
+- `src/preprocess/video2npy.py`: chuyển video (RGB) thành `.npy` sequences; mỗi frame -> vector keypoints (pose + left hand + right hand). Mặc định mỗi .npy có `seq_len` frames (pad/truncate). Có thể dùng `--skip_existing` để bỏ qua các file `.npy` đã sinh trước đó.
 - `src/preprocess/split_dataset.py`: duyệt `data/npy/*/*.npy` và sinh `train.csv`, `val.csv`, `test.csv` theo tỷ lệ (mặc định 70/15/15).
 - `src/preprocess/preprocessing.py`: gộp index, tạo scaler (StandardScaler) cho features (tùy chọn).
 - `src/model/data_loader.py`: `SignLanguageDataset` là PyTorch Dataset đọc `.npy` theo index csv.
@@ -52,14 +52,15 @@ sign-language-recognition/
 - Đưa video về **30fps, 1280×720 (16:9)**.
 - Tự động phát hiện chuyển động và cắt video.
 - **Pixel value normalization** về range [0,1] sử dụng min-max normalization.
+- Tùy chọn `--skip_existing` để bỏ qua các video đã được cắt (đã tồn tại file output trong `data/raw`).
 
   ```bash
-  python -m src.preprocess.preprocess_video --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90
+  python -m src.preprocess.preprocess_video --input_dir data/raw_unprocessed --output_dir data/raw --motion_threshold 90 --skip_existing
   ```
 
 4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
    ```bash
-   python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --seq_len 64
+   python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --seq_len 64 --skip_existing
    ```
 5. Sinh split index:
    ```bash

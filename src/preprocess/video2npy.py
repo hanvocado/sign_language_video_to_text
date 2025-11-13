@@ -95,7 +95,11 @@ def normalize_keypoints(seq, wrist_left_idx=15, wrist_right_idx=16):
     return seq3d.reshape(seq.shape[0], -1).astype(np.float32)
 
 
-def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=True):
+def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=True, skip_existing=False):
+    if skip_existing and os.path.exists(output_path):
+        print(f"⏭️  Skip {video_path}: found existing {output_path}")
+        return
+
     cap = cv2.VideoCapture(video_path)
     holistic = mp_holistic.Holistic(
         min_detection_confidence=0.5, min_tracking_confidence=0.5
@@ -135,7 +139,7 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=Tru
     print(f"Saved {output_path}, shape={arr.shape}")
 
 
-def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=True):
+def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=True, skip_existing=False):
     for label in sorted(os.listdir(input_dir)):
         label_dir = os.path.join(input_dir, label)
         if not os.path.isdir(label_dir):
@@ -147,7 +151,7 @@ def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=True):
                 vpath = os.path.join(label_dir, f)
                 out_name = os.path.splitext(f)[0] + ".npy"
                 out_path = os.path.join(out_label_dir, out_name)
-                convert_video_to_npy(vpath, out_path, seq_len=seq_len, normalize=normalize)
+                convert_video_to_npy(vpath, out_path, seq_len=seq_len, normalize=normalize, skip_existing=skip_existing)
 
 
 if __name__ == "__main__":
@@ -156,8 +160,9 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", default="data/npy")
     parser.add_argument("--seq_len", type=int, default=SEQ_LEN)
     parser.add_argument("--no_normalize", action="store_true", help="Không chuẩn hóa keypoints")
+    parser.add_argument("--skip_existing", action="store_true", help="Bỏ qua video nếu file .npy đã tồn tại")
     args = parser.parse_args()
 
     batch_convert(
-        args.input_dir, args.output_dir, seq_len=args.seq_len, normalize=not args.no_normalize
+        args.input_dir, args.output_dir, seq_len=args.seq_len, normalize=not args.no_normalize, skip_existing=args.skip_existing
     )

@@ -8,6 +8,7 @@ Preprocess raw sign language videos:
 """
 
 import os
+import glob
 import cv2
 import numpy as np
 from pathlib import Path
@@ -49,7 +50,7 @@ def detect_motion(frame1, frame2, threshold=25, min_area=500):
 
 def preprocess_video(input_path, output_path, fps=30, width=1280, height=720, 
                      max_duration=5, motion_threshold=25, min_motion_area=500,
-                     min_motion_frames=5, motion_buffer=10):
+                     min_motion_frames=5, motion_buffer=10, skip_existing=False):
     """
     Preprocess video with motion detection to crop only active segments.
     
@@ -59,6 +60,14 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
         min_motion_frames: Minimum consecutive frames with motion to start recording
         motion_buffer: Number of frames to keep before/after motion (padding)
     """
+    output_dir = os.path.dirname(output_path)
+    base_name = os.path.splitext(os.path.basename(output_path))[0]
+    existing_segments = glob.glob(os.path.join(output_dir, f"{base_name}_*.mp4"))
+
+    if skip_existing and existing_segments:
+        print(f"⏭️  Skip {input_path}: existing preprocessed segments found")
+        return
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         print(f"❌ Cannot open {input_path}")
@@ -69,7 +78,7 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
 
     # Prepare output directory
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Motion detection state
     prev_gray = None
@@ -118,7 +127,7 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
                         out.release()
                         frames_written = 0
                     seg_name = os.path.splitext(os.path.basename(output_path))[0] + f"_{seg_idx}.mp4"
-                    seg_path = os.path.join(os.path.dirname(output_path), seg_name)
+                    seg_path = os.path.join(output_dir, seg_name)
                     out = cv2.VideoWriter(seg_path, fourcc, fps, (width, height))
                     seg_idx += 1
                 
@@ -152,7 +161,7 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
                     out.release()
                     frames_written = 0
                 seg_name = os.path.splitext(os.path.basename(output_path))[0] + f"_{seg_idx}.mp4"
-                seg_path = os.path.join(os.path.dirname(output_path), seg_name)
+                seg_path = os.path.join(output_dir, seg_name)
                 out = cv2.VideoWriter(seg_path, fourcc, fps, (width, height))
                 seg_idx += 1
             
@@ -192,7 +201,7 @@ def normalize_frame(frame):
 
 def batch_preprocess(input_dir, output_dir, fps=30, width=1280, height=720, 
                      max_duration=5, motion_threshold=25, min_motion_area=500,
-                     min_motion_frames=5, motion_buffer=10):
+                     min_motion_frames=5, motion_buffer=10, skip_existing=False):
     for label in sorted(os.listdir(input_dir)):
         in_label_dir = os.path.join(input_dir, label)
         if not os.path.isdir(in_label_dir):
@@ -207,7 +216,7 @@ def batch_preprocess(input_dir, output_dir, fps=30, width=1280, height=720,
                 preprocess_video(in_path, out_path, fps=fps, width=width, height=height,
                                max_duration=max_duration, motion_threshold=motion_threshold,
                                min_motion_area=min_motion_area, min_motion_frames=min_motion_frames,
-                               motion_buffer=motion_buffer)
+                               motion_buffer=motion_buffer, skip_existing=skip_existing)
 
 
 if __name__ == "__main__":
@@ -222,6 +231,7 @@ if __name__ == "__main__":
     parser.add_argument("--min_motion_area", type=int, default=500, help="Diện tích tối thiểu của vùng chuyển động")
     parser.add_argument("--min_motion_frames", type=int, default=5, help="Số frame liên tiếp có chuyển động để bắt đầu ghi")
     parser.add_argument("--motion_buffer", type=int, default=10, help="Số frame buffer trước/sau chuyển động")
+    parser.add_argument("--skip_existing", action="store_true", help="Bỏ qua video nếu đã có segment output")
     
     args = parser.parse_args()
 
@@ -229,4 +239,4 @@ if __name__ == "__main__":
                      fps=args.fps, width=args.width, height=args.height,
                      max_duration=args.max_duration, motion_threshold=args.motion_threshold,
                      min_motion_area=args.min_motion_area, min_motion_frames=args.min_motion_frames,
-                     motion_buffer=args.motion_buffer)
+                     motion_buffer=args.motion_buffer, skip_existing=args.skip_existing)
