@@ -65,11 +65,13 @@ sign-language-recognition/
 
 5. Tăng cường dữ liệu
    ```bash
-   
+   python -m 
    ```
 
 6. Chuẩn hóa keypoints
-
+   ```bash
+   python -m src.preprocess.normalize_keypoints
+   ```
 
 7. Sinh split index:
    ```bash

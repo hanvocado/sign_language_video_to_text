@@ -2,7 +2,7 @@
 *.parquet
 /data/raw*/
 images/
-data/npy/
+data/npy*/
 models/checkpoints/best_epoch*.pth
 
 # Byte-compiled / optimized / DLL files
