@@ -60,25 +60,34 @@ sign-language-recognition/
 
 4. Convert tất cả video sang npy (pose+hands, seq_len=64 mặc định):
    ```bash
-   python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --seq_len 64 --skip_existing
+   python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy_raw --seq_len 64 --skip_existing
    ```
-5. Sinh split index:
+
+5. Tăng cường dữ liệu
+   ```bash
+   
+   ```
+
+6. Chuẩn hóa keypoints
+
+
+7. Sinh split index:
    ```bash
    python -m src.preprocess.split_dataset --data_dir data/npy --output_dir data/splits --train_ratio 0.7 --val_ratio 0.15
    ```
-6. (Tùy chọn) tạo scaler (fit StandardScaler trên các frame trung bình):
+8. (Tùy chọn) tạo scaler (fit StandardScaler trên các frame trung bình):
    ```bash
    python -m src.preprocess.preprocessing --index_csv data/splits/train.csv --scaler_path models/checkpoints/scaler.joblib
    ```
-7. Huấn luyện:
+9. Huấn luyện:
    ```bash
    python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 50
    ```
-8. Đánh giá:
+10. Đánh giá:
    ```bash
    python -m src.model.eval --index_csv data/splits/test.csv --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
    ```
-9. Realtime inference:
+11. Realtime inference:
    ```bash
    python -m src.infer_realtime --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
    ```
