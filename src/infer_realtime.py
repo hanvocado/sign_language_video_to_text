@@ -46,10 +46,14 @@ def realtime(args):
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
     )
-    buffer = deque(maxlen=seq_len)
 
     prev_gray = None
-    MOTION_THRESHOLD = 12   # tune: 8–20 works well
+    MOTION_THRESHOLD = 3            # tune 8–20
+    STILL_FRAMES_REQUIRED = 8       # motion below threshold for N frames = sign finished
+
+    state = "waiting"
+    segment = []                    # store variable-length sign frames
+    still_count = 0
 
     try:
         while True:
@@ -61,11 +65,6 @@ def realtime(args):
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if prev_gray is None:
                 prev_gray = gray
-                cv2.putText(frame, "Initializing...", (10,40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
-                cv2.imshow("Realtime Inference", frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
                 continue
 
             motion = cv2.absdiff(prev_gray, gray)
@@ -73,38 +72,68 @@ def realtime(args):
             motion_level = th.mean()
             prev_gray = gray
 
-            movement_detected = motion_level > MOTION_THRESHOLD
+            movement = motion_level > MOTION_THRESHOLD
 
-            # --- Process only when movement appears ---
-            if movement_detected:
+            # ------------------------------------------------------------------
+            # FSM (Finite State Machine)
+            # ------------------------------------------------------------------
+
+            if state == "waiting":
+                cv2.putText(frame, "Waiting for sign...", (10,40),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,0,255), 3)
+
+                if movement:
+                    state = "recording"
+                    segment = []
+                    still_count = 0
+
+            elif state == "recording":
+                cv2.putText(frame, f"Recording ({len(segment)} frames)", (10,40),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,255,255), 3)
+
+                # collect keypoints
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = holistic.process(image)
-
                 vec = extract_keypoints(results)
-                buffer.append(vec)
+                segment.append(vec)
 
-                if len(buffer) == seq_len:
-                    arr = np.stack(list(buffer), axis=0).astype(np.float32)
-                    X = torch.from_numpy(arr).unsqueeze(0).to(DEVICE)
-
-                    with torch.no_grad():
-                        logits = model(X)
-                        probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
-
-                    pred = int(probs.argmax())
-                    label = label_list[pred]
-                    conf = float(probs[pred])
-
-                    cv2.putText(frame, f"{label} ({conf:.2f})", (10,40),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,0), 3)
+                if movement:
+                    still_count = 0
                 else:
-                    cv2.putText(frame, f"Capturing... {len(buffer)}/{seq_len}",
-                                (10,40), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,255,255), 3)
-            else:
-                # reset buffer to avoid stale sequences
-                buffer.clear()
-                cv2.putText(frame, "Waiting for motion...", (10,40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,0,255), 3)
+                    still_count += 1
+
+                # Sign ends → movement stopped long enough
+                if still_count >= STILL_FRAMES_REQUIRED:
+                    # -----------------------------------------------------------
+                    # PROCESS SEGMENT
+                    # -----------------------------------------------------------
+                    if len(segment) > 0:
+                        arr = np.array(segment, dtype=np.float32)
+
+                        # pad or interpolate to seq_len
+                        if len(arr) < seq_len:
+                            pad = np.zeros((seq_len - len(arr), arr.shape[1]), dtype=np.float32)
+                            arr = np.concatenate([arr, pad], axis=0)
+                        else:
+                            arr = arr[:seq_len]
+
+                        X = torch.from_numpy(arr).unsqueeze(0).to(DEVICE)
+
+                        with torch.no_grad():
+                            logits = model(X)
+                            probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+
+                        pred = int(probs.argmax())
+                        label = label_list[pred]
+                        conf = float(probs[pred])
+
+                        cv2.putText(frame, f"{label} ({conf:.2f})",
+                                    (10,80), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,0), 3)
+
+                    # reset and go back to waiting
+                    state = "waiting"
+                    segment = []
+                    still_count = 0
 
             cv2.imshow('Realtime Inference', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -114,7 +143,6 @@ def realtime(args):
         cap.release()
         cv2.destroyAllWindows()
         holistic.close()
-
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
