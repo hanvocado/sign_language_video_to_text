@@ -34,6 +34,11 @@ def extract_keypoints(results):
 
 
 def realtime(args):
+    DISPLAY_DURATION = 1.5
+    last_pred_label = None
+    last_pred_conf = None
+    last_pred_time = 0
+
     label_list = load_label_map(args.label_map)
     model = build_model(num_classes=len(label_list), input_dim=args.input_dim).to(DEVICE)
     ck = load_checkpoint(args.ckpt, device=DEVICE)
@@ -127,6 +132,10 @@ def realtime(args):
                         label = label_list[pred]
                         conf = float(probs[pred])
 
+                        last_pred_label = label
+                        last_pred_conf = conf
+                        last_pred_time = time.time()
+
                         cv2.putText(frame, f"{label} ({conf:.2f})",
                                     (10,80), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,0), 3)
 
@@ -134,6 +143,13 @@ def realtime(args):
                     state = "waiting"
                     segment = []
                     still_count = 0
+            
+            if last_pred_label is not None:
+                if time.time() - last_pred_time <= DISPLAY_DURATION:
+                    cv2.putText(frame, f"{last_pred_label} ({last_pred_conf:.2f})",
+                                (10,80), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0,255,0), 3)
+                else:
+                    last_pred_label = None
 
             cv2.imshow('Realtime Inference', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
