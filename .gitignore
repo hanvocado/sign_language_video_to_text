@@ -4,6 +4,7 @@
 images/
 data/npy*/
 models/checkpoints/best_epoch*.pth
+*raw*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
