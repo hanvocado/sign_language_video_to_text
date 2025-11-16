@@ -82,6 +82,10 @@ sign-language-recognition/
    ```bash
    python -m src.infer_realtime --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
    ```
+10. Chạy ứng dụng:
+   ```bash
+   streamlit run app.py
+   ```
 
 ## Ghi chú kỹ thuật
 
