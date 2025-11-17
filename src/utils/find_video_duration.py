@@ -1,11 +1,16 @@
 import cv2
 import os
+import argparse
 import numpy as np
 
-raw_dir = "data/raw"
 durations = []
 
-for root, _, files in os.walk(raw_dir):
+parser = argparse.ArgumentParser()
+parser.add_argument("--dir", default="data/raw")
+args = parser.parse_args()
+dir = args.dir
+
+for root, _, files in os.walk(dir):
     for file in files:
         if file.endswith(".mp4"):
             path = os.path.join(root, file)

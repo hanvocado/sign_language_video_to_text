@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 import argparse
+from src.utils.logger import *
 
 def detect_motion(frame1, frame2, threshold=25, min_area=500):
     """
@@ -65,12 +66,12 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
     existing_segments = glob.glob(os.path.join(output_dir, f"{base_name}_*.mp4"))
 
     if skip_existing and existing_segments:
-        print(f"⏭️  Skip {input_path}: existing preprocessed segments found")
+        logger.info(f"⏭️  Skip {input_path}: existing preprocessed segments found")
         return
 
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
-        print(f"❌ Cannot open {input_path}")
+        logger.error(f"❌ Cannot open {input_path}")
         return
 
     orig_fps = cap.get(cv2.CAP_PROP_FPS)
@@ -178,9 +179,9 @@ def preprocess_video(input_path, output_path, fps=30, width=1280, height=720,
     cap.release()
     
     if seg_idx > 0:
-        print(f"✅ Preprocessed {input_path} -> {seg_idx} segment(s) in {os.path.dirname(output_path)}")
+        logger.info(f"✅ Preprocessed {input_path} -> {seg_idx} segment(s) in {os.path.dirname(output_path)}")
     else:
-        print(f"⚠️  No motion detected in {input_path}, no output created")
+        logger.warning(f"⚠️  No motion detected in {input_path}, no output created")
 
 
 def normalize_frame(frame):
@@ -226,14 +227,17 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=30, help="Tần số khung hình sau chuẩn hóa")
     parser.add_argument("--width", type=int, default=1280, help="Chiều rộng video output")
     parser.add_argument("--height", type=int, default=720, help="Chiều cao video output")
-    parser.add_argument("--max_duration", type=int, default=5, help="Thời lượng tối đa mỗi clip (giây), 0 = không cắt")
+    parser.add_argument("--max_duration", type=int, default=10, help="Thời lượng tối đa mỗi clip (giây), 0 = không cắt")
     parser.add_argument("--motion_threshold", type=int, default=25, help="Ngưỡng khác biệt pixel để phát hiện chuyển động")
-    parser.add_argument("--min_motion_area", type=int, default=500, help="Diện tích tối thiểu của vùng chuyển động")
+    parser.add_argument("--min_motion_area", type=int, default=100, help="Diện tích tối thiểu của vùng chuyển động")
     parser.add_argument("--min_motion_frames", type=int, default=5, help="Số frame liên tiếp có chuyển động để bắt đầu ghi")
     parser.add_argument("--motion_buffer", type=int, default=10, help="Số frame buffer trước/sau chuyển động")
     parser.add_argument("--skip_existing", action="store_true", help="Bỏ qua video nếu đã có segment output")
     
     args = parser.parse_args()
+
+    logger = setup_logger("preprocess_video")
+    log_arguments(logger=logger, args=args)
 
     batch_preprocess(args.input_dir, args.output_dir,
                      fps=args.fps, width=args.width, height=args.height,

@@ -139,7 +139,7 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=Tru
     print(f"Saved {output_path}, shape={arr.shape}")
 
 
-def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=True, skip_existing=False):
+def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=False, skip_existing=False):
     for label in sorted(os.listdir(input_dir)):
         label_dir = os.path.join(input_dir, label)
         if not os.path.isdir(label_dir):
@@ -159,10 +159,10 @@ if __name__ == "__main__":
     parser.add_argument("--input_dir", default="data/raw")
     parser.add_argument("--output_dir", default="data/npy")
     parser.add_argument("--seq_len", type=int, default=SEQ_LEN)
-    parser.add_argument("--no_normalize", action="store_true", help="Không chuẩn hóa keypoints")
+    parser.add_argument("--normalize", action="store_true", help="Chuẩn hóa keypoints")
     parser.add_argument("--skip_existing", action="store_true", help="Bỏ qua video nếu file .npy đã tồn tại")
     args = parser.parse_args()
 
     batch_convert(
-        args.input_dir, args.output_dir, seq_len=args.seq_len, normalize=not args.no_normalize, skip_existing=args.skip_existing
+        args.input_dir, args.output_dir, seq_len=args.seq_len, normalize=args.normalize, skip_existing=args.skip_existing
     )
