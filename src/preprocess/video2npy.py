@@ -10,6 +10,7 @@ import os, cv2, numpy as np, argparse, sys
 from pathlib import Path
 import mediapipe as mp
 from src.config.config import SEQ_LEN
+from src.utils.logger import *
 
 mp_holistic = mp.solutions.holistic
 
@@ -97,7 +98,7 @@ def normalize_keypoints(seq, wrist_left_idx=15, wrist_right_idx=16):
 
 def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=True, skip_existing=False):
     if skip_existing and os.path.exists(output_path):
-        print(f"⏭️  Skip {video_path}: found existing {output_path}")
+        logger.info(f"⏭️  Skip {video_path}: found existing {output_path}")
         return
 
     cap = cv2.VideoCapture(video_path)
@@ -117,7 +118,7 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=Tru
     holistic.close()
 
     if len(seq) == 0:
-        print(f"⚠️ Warning: No keypoints extracted from {video_path}")
+        logger.warning(f"⚠️ Warning: No keypoints extracted from {video_path}")
         # Updated feature dimension: pose(99) + left_hand(63) + right_hand(63) = 225
         seq = [np.zeros(225, dtype=np.float32) for _ in range(seq_len)]
 
@@ -136,7 +137,7 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN, normalize=Tru
 
     Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
     np.save(output_path, arr)
-    print(f"Saved {output_path}, shape={arr.shape}")
+    logger.info(f"Saved {output_path}, shape={arr.shape}")
 
 
 def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, normalize=False, skip_existing=False):
@@ -162,6 +163,9 @@ if __name__ == "__main__":
     parser.add_argument("--normalize", action="store_true", help="Chuẩn hóa keypoints")
     parser.add_argument("--skip_existing", action="store_true", help="Bỏ qua video nếu file .npy đã tồn tại")
     args = parser.parse_args()
+
+    logger = setup_logger("video2npy")
+    log_arguments(logger=logger, args=args)
 
     batch_convert(
         args.input_dir, args.output_dir, seq_len=args.seq_len, normalize=args.normalize, skip_existing=args.skip_existing
