@@ -2,15 +2,16 @@
 import os, sys, argparse, time
 import torch, torch.nn as nn, torch.optim as optim
 from torch.utils.data import DataLoader
-from src.config.config import DEVICE, CKPT_DIR, BATCH_SIZE, LR, EPOCHS, SEQ_LEN
+from src.config.config import DEVICE, CKPT_DIR as DEFAULT_CKPT_DIR, BATCH_SIZE, LR, EPOCHS, SEQ_LEN
 from src.model.data_loader import SignLanguageDataset
 from src.model.model import build_model
 from src.utils.utils import save_checkpoint, save_label_map, ensure_dir
 import numpy as np
 from sklearn.metrics import accuracy_score
-import json
+from src.utils.logger import *
 
 def train(args):
+    CKPT_DIR = os.path.join(DEFAULT_CKPT_DIR, "lsa64")
     ensure_dir(CKPT_DIR)
     # Build training dataset and label map from training csv (deterministic order)
     train_df = None
@@ -22,7 +23,7 @@ def train(args):
     # save label map to checkpoint dir for inference later
     label_map_path = os.path.join(CKPT_DIR, 'label_map.json')
     save_label_map(label_list, label_map_path)
-    print(f"Label map saved -> {label_map_path}")
+    logger.info(f"Label map saved -> {label_map_path}")
 
     # Recreate train/val datasets with explicit mapping so labels align
     train_ds = SignLanguageDataset(args.train_csv, seq_len=args.seq_len, scaler_path=args.scaler, label_map=label_list)
@@ -65,16 +66,16 @@ def train(args):
                 ys.extend(y.cpu().numpy().tolist())
         val_acc = accuracy_score(ys, preds) if ys else 0.0
         elapsed = time.time() - t0
-        print(f"Epoch {epoch}/{args.epochs}  loss={avg_loss:.4f}  val_acc={val_acc:.4f}  time={elapsed:.1f}s")
+        logger.info(f"Epoch {epoch}/{args.epochs}  loss={avg_loss:.4f}  val_acc={val_acc:.4f}  time={elapsed:.1f}s")
 
         # save best
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             ckpt_path = os.path.join(CKPT_DIR, f"best_epoch{epoch}_acc{val_acc:.4f}.pth")
             save_checkpoint(model, optimizer, epoch, ckpt_path, extra={'val_acc': val_acc, 'label_list': label_list})
-            print(f"Saved checkpoint -> {ckpt_path}")
+            logger.info(f"Saved checkpoint -> {ckpt_path}")
 
-    print(f"Training finished. Best val acc: {best_val_acc:.4f}")
+    logger.info(f"Training finished. Best val acc: {best_val_acc:.4f}")
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
@@ -91,4 +92,8 @@ if __name__ == '__main__':
     p.add_argument('--lr', type=float, default=LR)
     p.add_argument('--epochs', type=int, default=EPOCHS)
     args = p.parse_args()
+
+    logger = setup_logger("train")
+    log_arguments(logger=logger, args=args)
+
     train(args)

@@ -70,7 +70,7 @@ sign-language-recognition/
 
 6. Chuẩn hóa keypoints
    ```bash
-   python -m src.preprocess.normalize_keypoints
+   python -m src.preprocess.normalize_keypoints --input_dir data/npy_raw --output_dir data/npy_normalized
    ```
 
 7. Sinh split index:
@@ -83,7 +83,7 @@ sign-language-recognition/
    ```
 9. Huấn luyện:
    ```bash
-   python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --epochs 50
+   python -m src.model.train --train_csv data/splits/train.csv --val_csv data/splits/val.csv --scaler models/checkpoints/scaler.joblib --epochs 50
    ```
 10. Đánh giá:
    ```bash
