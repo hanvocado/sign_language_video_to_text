@@ -9,6 +9,10 @@ import joblib
 class SignLanguageDataset(Dataset):
     def __init__(self, index_csv, seq_len=SEQ_LEN, scaler_path=None, label_map=None):
         self.df = pd.read_csv(index_csv)
+        
+        self.df = self.df.dropna(subset=['path', 'label'])
+        self.df['label'] = self.df['label'].astype(str)
+        
         self.seq_len = seq_len
         self.scaler = None
         if scaler_path and os.path.exists(scaler_path):
