@@ -1,29 +1,48 @@
 """
-Optimized training script for small sign language datasets
-Includes debugging, proper regularization, and small-dataset best practices
+Training script for Sign Language Recognition
+
+Works with directory structure:
+    data_dir/
+        train/<gloss>/*.mp4 (or *.npy)
+        val/<gloss>/*.mp4 (or *.npy)
+        test/<gloss>/*.mp4 (or *.npy)
+
+Features:
+- Runtime augmentation
+- Early stopping
+- Learning rate scheduling
+- Gradient clipping
+- Proper logging
 """
-import os, sys, argparse, time
-import torch, torch.nn as nn, torch.optim as optim
+
+import os
+import sys
+import argparse
+import time
+import json
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
-from sklearn.metrics import accuracy_score
-import json
+from sklearn.metrics import accuracy_score, classification_report
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Import from project
+from src.model.data_loader import SignLanguageDataset, create_data_loaders
+from src.utils.logger import *
 
-from src.config.config import DEVICE, CKPT_DIR, SEQ_LEN
-from src.model.data_loader import SignLanguageDataset
-from src.utils.utils import save_checkpoint, save_label_map, ensure_dir
 
+# =====================================================
+# Models
+# =====================================================
 
 class SimpleLSTM(nn.Module):
-    """Simplified LSTM for small datasets"""
+    """Simple LSTM for small datasets"""
     def __init__(self, input_dim=225, hidden_dim=128, num_classes=10, dropout=0.5):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_dim, 
-            hidden_dim, 
+            input_dim,
+            hidden_dim,
             num_layers=1,
             batch_first=True,
             bidirectional=False
@@ -32,22 +51,45 @@ class SimpleLSTM(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, num_classes)
         )
-    
+
     def forward(self, x):
-        # x: (batch, seq_len, input_dim)
         out, (hn, cn) = self.lstm(x)
-        # Use last hidden state
-        last = out[:, -1, :]
-        return self.classifier(last)
+        return self.classifier(out[:, -1, :])
+
+
+class BiLSTM(nn.Module):
+    """Bidirectional LSTM"""
+    def __init__(self, input_dim=225, hidden_dim=128, num_layers=2, 
+                 num_classes=10, dropout=0.3):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_dim,
+            hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+            bidirectional=True
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+    def forward(self, x):
+        out, (hn, cn) = self.lstm(x)
+        return self.classifier(out[:, -1, :])
 
 
 class SimpleGRU(nn.Module):
-    """Even simpler GRU for very small datasets"""
+    """Simple GRU for very small datasets"""
     def __init__(self, input_dim=225, hidden_dim=128, num_classes=10, dropout=0.5):
         super().__init__()
         self.gru = nn.GRU(
-            input_dim, 
-            hidden_dim, 
+            input_dim,
+            hidden_dim,
             num_layers=1,
             batch_first=True
         )
@@ -55,11 +97,28 @@ class SimpleGRU(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, num_classes)
         )
-    
+
     def forward(self, x):
         out, hn = self.gru(x)
         return self.classifier(out[:, -1, :])
 
+
+def build_model(model_type, input_dim, hidden_dim, num_classes, 
+                num_layers=1, dropout=0.3, bidirectional=False):
+    """Build model based on type"""
+    if model_type == 'lstm':
+        return SimpleLSTM(input_dim, hidden_dim, num_classes, dropout)
+    elif model_type == 'bilstm':
+        return BiLSTM(input_dim, hidden_dim, num_layers, num_classes, dropout)
+    elif model_type == 'gru':
+        return SimpleGRU(input_dim, hidden_dim, num_classes, dropout)
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+
+
+# =====================================================
+# Training Utilities
+# =====================================================
 
 class EarlyStopping:
     """Early stopping to prevent overfitting"""
@@ -69,7 +128,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-    
+
     def __call__(self, val_acc):
         if self.best_score is None:
             self.best_score = val_acc
@@ -83,157 +142,171 @@ class EarlyStopping:
         return self.early_stop
 
 
+def save_checkpoint(model, optimizer, epoch, path, **extra):
+    """Save model checkpoint"""
+    checkpoint = {
+        'epoch': epoch,
+        'model_state': model.state_dict(),
+        'optimizer_state': optimizer.state_dict(),
+        **extra
+    }
+    torch.save(checkpoint, path)
+
+
+def load_checkpoint(path, model, optimizer=None, device='cpu'):
+    """Load model checkpoint"""
+    checkpoint = torch.load(path, map_location=device)
+    model.load_state_dict(checkpoint['model_state'])
+    if optimizer and 'optimizer_state' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer_state'])
+    return checkpoint
+
+
+# =====================================================
+# Main Training Function
+# =====================================================
+
 def train(args):
-    ensure_dir(CKPT_DIR)
+    # Setup
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logger.info(f"Using device: {device}")
     
-    print("\n" + "="*70)
-    print("TRAINING CONFIGURATION")
-    print("="*70)
+    os.makedirs(args.ckpt_dir, exist_ok=True)
+    
+    # Print configuration
+    logger.info("\n" + "=" * 70)
+    logger.info("TRAINING CONFIGURATION")
+    logger.info("=" * 70)
     for key, value in vars(args).items():
-        print(f"  {key}: {value}")
-    print("="*70 + "\n")
+        logger.info(f"  {key}: {value}")
+    logger.info("=" * 70 + "\n")
     
     # =========================================================================
-    # DATA LOADING
+    # Data Loading
     # =========================================================================
     
-    # Create train dataset to infer label order
-    train_ds = SignLanguageDataset(args.train_csv, seq_len=args.seq_len, scaler_path=args.scaler)
-    label_list = train_ds.idx_to_label
+    # Create datasets
+    train_ds = SignLanguageDataset(
+        args.data_dir,
+        seq_len=args.seq_len,
+        source=args.source,
+        split='train',
+        normalize=True,
+        augment=True,  # Augment training data
+    )
+    
+    label_map = train_ds.get_label_map()
+    num_classes = len(label_map)
+    
+    val_ds = SignLanguageDataset(
+        args.data_dir,
+        seq_len=args.seq_len,
+        source=args.source,
+        split='val',
+        normalize=True,
+        augment=False,  # No augmentation for validation
+        label_map=label_map,
+    )
+    
+    logger.info(f"Training samples: {len(train_ds)}")
+    logger.info(f"Validation samples: {len(val_ds)}")
+    logger.info(f"Number of classes: {num_classes}")
+    logger.info(f"Classes: {label_map}\n")
     
     # Save label map
-    label_map_path = os.path.join(CKPT_DIR, 'label_map.json')
-    save_label_map(label_list, label_map_path)
-    print(f"Label map saved -> {label_map_path}")
-    print(f"Classes ({len(label_list)}): {label_list}\n")
+    label_map_path = os.path.join(args.ckpt_dir, 'label_map.json')
+    with open(label_map_path, 'w') as f:
+        json.dump(label_map, f)
+    logger.info(f"Label map saved -> {label_map_path}")
     
-    # Recreate datasets with explicit mapping
-    train_ds = SignLanguageDataset(args.train_csv, seq_len=args.seq_len, 
-                                   scaler_path=args.scaler, label_map=label_list)
-    val_ds = SignLanguageDataset(args.val_csv, seq_len=args.seq_len, 
-                                 scaler_path=args.scaler, label_map=label_list)
+    # Create data loaders
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        drop_last=False,
+    )
     
-    print(f"Training samples: {len(train_ds)}")
-    print(f"Validation samples: {len(val_ds)}")
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+    )
     
     # =========================================================================
-    # DEBUG: Check data
+    # Data Sanity Check
     # =========================================================================
     
-    print("\n" + "="*70)
-    print("DATA SANITY CHECK")
-    print("="*70)
+    logger.info("\n" + "=" * 70)
+    logger.info("DATA SANITY CHECK")
+    logger.info("=" * 70)
     
-    # Check a few samples
     for i in range(min(3, len(train_ds))):
         X, y = train_ds[i]
-        print(f"Sample {i}: shape={X.shape}, label={y.item()}, "
+        logger.info(f"Sample {i}: shape={X.shape}, label={y.item()} ({label_map[y.item()]}), "
               f"range=[{X.min():.3f}, {X.max():.3f}], "
               f"mean={X.mean():.3f}, std={X.std():.3f}")
         
-        # Check for issues
         if torch.all(X == 0):
-            print(f"  ⚠️  WARNING: Sample {i} is all zeros!")
+            logger.warning(f"  ⚠️  WARNING: Sample {i} is all zeros!")
         if torch.any(torch.isnan(X)):
-            print(f"  ❌ ERROR: Sample {i} contains NaN!")
-        if X.std() < 0.001:
-            print(f"  ⚠️  WARNING: Sample {i} has very low variance!")
+            logger.error(f"  ❌ ERROR: Sample {i} contains NaN!")
     
     # =========================================================================
-    # DATA LOADERS
+    # Model
     # =========================================================================
     
-    train_loader = DataLoader(
-        train_ds, 
-        batch_size=args.batch_size, 
-        shuffle=True, 
-        num_workers=0,  # Set to 0 for debugging
-        drop_last=False
+    model = build_model(
+        args.model_type,
+        args.input_dim,
+        args.hidden_dim,
+        num_classes,
+        args.num_layers,
+        args.dropout,
+        args.bidirectional,
     )
-    val_loader = DataLoader(
-        val_ds, 
-        batch_size=args.batch_size, 
-        shuffle=False, 
-        num_workers=0
-    )
+    model = model.to(device)
     
-    # =========================================================================
-    # MODEL
-    # =========================================================================
-    
-    num_classes = len(label_list)
-    
-    if args.model_type == 'lstm':
-        model = SimpleLSTM(
-            input_dim=args.input_dim,
-            hidden_dim=args.hidden_dim,
-            num_classes=num_classes,
-            dropout=args.dropout
-        )
-    elif args.model_type == 'gru':
-        model = SimpleGRU(
-            input_dim=args.input_dim,
-            hidden_dim=args.hidden_dim,
-            num_classes=num_classes,
-            dropout=args.dropout
-        )
-    else:
-        # Use original model
-        from src.model.model import build_model
-        model = build_model(
-            num_classes=num_classes, 
-            input_dim=args.input_dim,
-            hidden_dim=args.hidden_dim, 
-            num_layers=args.num_layers,
-            dropout=args.dropout, 
-            bidirectional=args.bidirectional
-        )
-    
-    model = model.to(DEVICE)
-    
-    # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"\nModel: {args.model_type.upper()}")
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
+    logger.info(f"\nModel: {args.model_type.upper()}")
+    logger.info(f"Total parameters: {total_params:,}")
+    logger.info(f"Trainable parameters: {trainable_params:,}")
     
     # =========================================================================
-    # LOSS AND OPTIMIZER
+    # Loss, Optimizer, Scheduler
     # =========================================================================
     
-    # Use label smoothing for small datasets
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     
-    # Use AdamW with weight decay
     optimizer = optim.AdamW(
-        model.parameters(), 
-        lr=args.lr, 
+        model.parameters(),
+        lr=args.lr,
         weight_decay=args.weight_decay
     )
     
-    # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='max', 
-        factor=0.5, 
-        patience=10, 
-        verbose=True
+        optimizer,
+        mode='max',
+        factor=0.5,
+        patience=10
     )
     
-    # Early stopping
     early_stopping = EarlyStopping(patience=args.patience)
     
     # =========================================================================
-    # TRAINING LOOP
+    # Training Loop
     # =========================================================================
     
-    print("\n" + "="*70)
-    print("TRAINING")
-    print("="*70)
+    logger.info("\n" + "=" * 70)
+    logger.info("TRAINING")
+    logger.info("=" * 70)
     
     best_val_acc = 0.0
     best_epoch = 0
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
     
     for epoch in range(1, args.epochs + 1):
         # ----- Training -----
@@ -245,30 +318,24 @@ def train(args):
         t0 = time.time()
         
         for batch_idx, (X, y) in enumerate(train_loader):
-            X = X.to(DEVICE)
-            y = y.to(DEVICE)
+            X = X.to(device)
+            y = y.to(device)
             
-            # Forward pass
+            # Forward
             logits = model(X)
             loss = criterion(logits, y)
             
-            # Check for NaN loss
+            # Check for NaN
             if torch.isnan(loss):
-                print(f"❌ NaN loss at epoch {epoch}, batch {batch_idx}")
-                print(f"   X range: [{X.min():.3f}, {X.max():.3f}]")
-                print(f"   Logits range: [{logits.min():.3f}, {logits.max():.3f}]")
+                logger.info(f"❌ NaN loss at epoch {epoch}, batch {batch_idx}")
                 return
             
-            # Backward pass
+            # Backward
             optimizer.zero_grad()
             loss.backward()
-            
-            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            
             optimizer.step()
             
-            # Record
             train_losses.append(loss.item())
             train_preds.extend(logits.argmax(dim=1).cpu().numpy().tolist())
             train_labels.extend(y.cpu().numpy().tolist())
@@ -278,14 +345,14 @@ def train(args):
         
         # ----- Validation -----
         model.eval()
+        val_losses = []
         val_preds = []
         val_labels = []
-        val_losses = []
         
         with torch.no_grad():
             for X, y in val_loader:
-                X = X.to(DEVICE)
-                y = y.to(DEVICE)
+                X = X.to(device)
+                y = y.to(device)
                 
                 logits = model(X)
                 loss = criterion(logits, y)
@@ -299,12 +366,18 @@ def train(args):
         
         elapsed = time.time() - t0
         
-        # Update learning rate
+        # Update scheduler
         scheduler.step(val_acc)
         current_lr = optimizer.param_groups[0]['lr']
         
+        # Record history
+        history['train_loss'].append(avg_train_loss)
+        history['train_acc'].append(train_acc)
+        history['val_loss'].append(avg_val_loss)
+        history['val_acc'].append(val_acc)
+        
         # Print progress
-        print(f"Epoch {epoch:3d}/{args.epochs} | "
+        logger.info(f"Epoch {epoch:3d}/{args.epochs} | "
               f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_acc:.4f} | "
               f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.4f} | "
               f"LR: {current_lr:.6f} | Time: {elapsed:.1f}s")
@@ -314,75 +387,135 @@ def train(args):
             best_val_acc = val_acc
             best_epoch = epoch
             
-            ckpt_path = os.path.join(CKPT_DIR, "best.pth")
+            ckpt_path = os.path.join(args.ckpt_dir, "best.pth")
             save_checkpoint(
                 model, optimizer, epoch, ckpt_path,
-                extra={'val_acc': val_acc, 'label_list': label_list}
+                val_acc=val_acc,
+                label_map=label_map,
+                args=vars(args),
             )
-            print(f"  ✓ New best! Saved -> {ckpt_path}")
+            logger.info(f"  ✓ New best! Saved -> {ckpt_path}")
         
-        # Early stopping check
+        # Early stopping
         if early_stopping(val_acc):
-            print(f"\nEarly stopping at epoch {epoch}")
+            logger.info(f"\nEarly stopping at epoch {epoch}")
             break
         
-        # Debug: Print predictions distribution every 10 epochs
+        # Debug: Print prediction distribution
         if epoch % 10 == 0:
-            print(f"  Predictions distribution: {np.bincount(val_preds, minlength=num_classes)}")
-            print(f"  Ground truth distribution: {np.bincount(val_labels, minlength=num_classes)}")
+            logger.info(f"  Pred dist: {np.bincount(val_preds, minlength=num_classes)}")
+            logger.info(f"  True dist: {np.bincount(val_labels, minlength=num_classes)}")
     
     # =========================================================================
-    # FINAL SUMMARY
+    # Final Summary
     # =========================================================================
     
-    print("\n" + "="*70)
-    print("TRAINING COMPLETED")
-    print("="*70)
-    print(f"Best validation accuracy: {best_val_acc:.4f} at epoch {best_epoch}")
-    print(f"Model saved to: {os.path.join(CKPT_DIR, 'best.pth')}")
-    print(f"Label map saved to: {label_map_path}")
+    logger.info("\n" + "=" * 70)
+    logger.info("TRAINING COMPLETED")
+    logger.info("=" * 70)
+    logger.info(f"Best validation accuracy: {best_val_acc:.4f} at epoch {best_epoch}")
+    logger.info(f"Model saved to: {os.path.join(args.ckpt_dir, 'best.pth')}")
     
-    # Final check
-    if best_val_acc < 0.1:
-        print("\n⚠️  WARNING: Accuracy is very low!")
-        print("Please run the diagnostic script:")
-        print("  python diagnose_pipeline.py --train_csv", args.train_csv)
+    # Save training history
+    history_path = os.path.join(args.ckpt_dir, 'history.json')
+    with open(history_path, 'w') as f:
+        json.dump(history, f)
+    logger.info(f"Training history saved to: {history_path}")
+    
+    # Evaluate on test set if available
+    test_dir = os.path.join(args.data_dir, 'test')
+    if os.path.exists(test_dir):
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST SET EVALUATION")
+        logger.info("=" * 70)
+        
+        test_ds = SignLanguageDataset(
+            args.data_dir,
+            seq_len=args.seq_len,
+            source=args.source,
+            split='test',
+            normalize=True,
+            augment=False,
+            label_map=label_map,
+        )
+        
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+        )
+        
+        # Load best model
+        load_checkpoint(
+            os.path.join(args.ckpt_dir, 'best.pth'),
+            model,
+            device=device
+        )
+        
+        model.eval()
+        test_preds = []
+        test_labels = []
+        
+        with torch.no_grad():
+            for X, y in test_loader:
+                X = X.to(device)
+                logits = model(X)
+                test_preds.extend(logits.argmax(dim=1).cpu().numpy().tolist())
+                test_labels.extend(y.cpu().numpy().tolist())
+        
+        test_acc = accuracy_score(test_labels, test_preds)
+        logger.info(f"\nTest Accuracy: {test_acc:.4f}")
+        logger.info("\nClassification Report:")
+        logger.info(classification_report(test_labels, test_preds, target_names=label_map))
 
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser(description='Train sign language recognition model (optimized for small datasets)')
+    parser = argparse.ArgumentParser(description='Train Sign Language Recognition Model')
     
     # Data
-    p.add_argument('--train_csv', default='data/splits/train.csv')
-    p.add_argument('--val_csv', default='data/splits/val.csv')
-    p.add_argument('--scaler', default=None, help='Optional scaler.joblib')
-    p.add_argument('--seq_len', type=int, default=64)
-    p.add_argument('--input_dim', type=int, default=225)
+    parser.add_argument('--data_dir', default='data/wlasl/wlasl100',
+                        help='Root directory with train/val/test subdirs')
+    parser.add_argument('--source', choices=['npy', 'video'], default='video',
+                        help='Load from .npy files or extract from videos')
+    parser.add_argument('--seq_len', type=int, default=10,
+                        help='Fixed sequence length')
+    parser.add_argument('--input_dim', type=int, default=225,
+                        help='Input feature dimension (225 for pose+hands)')
     
-    # Model (optimized for small datasets)
-    p.add_argument('--model_type', choices=['lstm', 'gru', 'original'], default='lstm',
-                   help='Model type: lstm (recommended), gru (simpler), original (your model)')
-    p.add_argument('--hidden_dim', type=int, default=128,
-                   help='Hidden dimension (128 for small datasets)')
-    p.add_argument('--num_layers', type=int, default=1,
-                   help='Number of layers (1 for small datasets)')
-    p.add_argument('--dropout', type=float, default=0.5,
-                   help='Dropout rate (0.5 for small datasets)')
-    p.add_argument('--bidirectional', action='store_true')
+    # Model
+    parser.add_argument('--model_type', choices=['lstm', 'bilstm', 'gru'], 
+                        default='lstm', help='Model architecture')
+    parser.add_argument('--hidden_dim', type=int, default=128,
+                        help='Hidden dimension')
+    parser.add_argument('--num_layers', type=int, default=1,
+                        help='Number of RNN layers')
+    parser.add_argument('--dropout', type=float, default=0.5,
+                        help='Dropout rate')
+    parser.add_argument('--bidirectional', action='store_true',
+                        help='Use bidirectional RNN')
     
-    # Training (optimized for small datasets)
-    p.add_argument('--batch_size', type=int, default=8,
-                   help='Batch size (8-16 for small datasets)')
-    p.add_argument('--lr', type=float, default=5e-4,
-                   help='Learning rate (5e-4 for small datasets)')
-    p.add_argument('--weight_decay', type=float, default=1e-3,
-                   help='Weight decay for L2 regularization')
-    p.add_argument('--label_smoothing', type=float, default=0.1,
-                   help='Label smoothing (0.1 for small datasets)')
-    p.add_argument('--epochs', type=int, default=100,
-                   help='Maximum epochs')
-    p.add_argument('--patience', type=int, default=20,
-                   help='Early stopping patience')
+    # Training
+    parser.add_argument('--batch_size', type=int, default=16,
+                        help='Batch size')
+    parser.add_argument('--lr', type=float, default=1e-3,
+                        help='Learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
+                        help='Weight decay')
+    parser.add_argument('--label_smoothing', type=float, default=0.1,
+                        help='Label smoothing')
+    parser.add_argument('--epochs', type=int, default=100,
+                        help='Maximum epochs')
+    parser.add_argument('--patience', type=int, default=20,
+                        help='Early stopping patience')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='Data loading workers')
     
-    args = p.parse_args()
+    # Output
+    parser.add_argument('--ckpt_dir', default='models/checkpoints',
+                        help='Checkpoint directory')
+    
+    args = parser.parse_args()
+    logger = setup_logger("train")
+    log_arguments(logger, args)
     train(args)
