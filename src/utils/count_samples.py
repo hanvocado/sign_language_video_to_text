@@ -17,22 +17,19 @@ def main(dir):
         num_videos = len([f for f in os.listdir(label_dir) if f.endswith(".mp4")])
         counts[label] = num_videos
 
-    # Print results
-    print("Number of videos per label:\n")
     for lbl, num in counts.items():
-        print(f"{lbl}: {num}")
-
-    print("\nTotal labels:", len(counts))
-    print("Total videos:", sum(counts.values()))
-
+        logger.info(f"{lbl}: {num}")
+    
+    logger.info(f"Total labels: {len(counts)}")
+    logger.info(f"Total videos: {sum(counts.values())}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", default="data/raw")
     args = parser.parse_args()
+    dir = args.dir
 
-    logger = setup_logger("video2npy")
+    logger = setup_logger(f"count_samples_{dir.replace('/', '_')}")
     log_arguments(logger=logger, args=args)
 
-    dir = args.dir
     main(dir)
