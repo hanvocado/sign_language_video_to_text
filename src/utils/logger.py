@@ -60,7 +60,7 @@ class ProjectLogger:
         if log_file is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             module_name = name.split('.')[-1]  # Get last part of module name
-            log_file = f"{module_name}_{timestamp}.log"
+            log_file = f"{timestamp}_{module_name}.log"
         
         file_path = log_path / log_file
         

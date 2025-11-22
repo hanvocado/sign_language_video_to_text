@@ -1,96 +1,168 @@
-"""Split dataset of .npy files into train/val/test csv indexes with balanced class distribution."""
-import os, glob, argparse, pandas as pd, random, sys
+"""
+Split a dataset of sign language videos into train/val/test
+with balanced class distribution AND move actual video files accordingly.
+
+Input structure (two modes):
+
+1) Nested mode (default):
+    data_dir/
+        GLOSS1/*.mp4
+        GLOSS2/*.mp4
+
+2) Flat mode (use --flat):
+    data_dir/*.mp4
+    + WLASL JSON required for mapping video_id -> gloss
+"""
+
+import os, glob, argparse, shutil
+import pandas as pd
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from datetime import datetime
+from tqdm import tqdm
 from src.utils.logger import *
 
-def split_dataset(data_dir, output_dir, train_ratio=0.7, val_ratio=0.15, seed=42):
-    # Collect all .npy files with their labels
+
+def collect_nested(data_dir):
+    """Collect files from gloss folders: data_dir/GLOSS/*.mp4."""
     rows = []
     for label in sorted(os.listdir(data_dir)):
         label_dir = os.path.join(data_dir, label)
         if not os.path.isdir(label_dir):
             continue
-        for p in glob.glob(os.path.join(label_dir, '*.npy')):
-            rows.append({'path': p, 'label': label})
-    
+        for p in glob.glob(os.path.join(label_dir, "*.mp4")):
+            rows.append({"path": p, "label": label})
+    return rows
+
+
+def collect_flat(data_dir, json_path):
+    """Collect from data_dir/*.mp4 using WLASL JSON to assign gloss labels."""
+    import json
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Create mapping video_id -> gloss
+    vid2gloss = {}
+    for entry in data:
+        gloss = entry["gloss"]
+        for inst in entry["instances"]:
+            vid = inst["video_id"]
+            vid2gloss[vid] = gloss
+
+    rows = []
+    for p in glob.glob(os.path.join(data_dir, "*.mp4")):
+        vid = Path(p).stem  # video_id.mp4 → video_id
+        if vid not in vid2gloss:
+            logger.warning(f"[WARNING] Cannot find gloss for {vid}")
+            continue
+        rows.append({"path": p, "label": vid2gloss[vid]})
+    return rows
+
+
+def move_files(df, split_name, output_dir):
+    """Move actual video files into output_dir/split_name/label/."""
+    for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Moving {split_name}"):
+        src = row["path"]
+        label = row["label"]
+
+        dst_dir = os.path.join(output_dir, split_name, label)
+        os.makedirs(dst_dir, exist_ok=True)
+
+        dst = os.path.join(dst_dir, os.path.basename(src))
+        shutil.copy2(src, dst)
+
+
+def split_dataset(data_dir, output_dir, json_path=None, flat=False,
+                  train_ratio=0.7, val_ratio=0.15, seed=42):
+
+    # Collect files
+    if flat:
+        if json_path is None:
+            raise ValueError("Flat mode requires --json mapping file")
+        rows = collect_flat(data_dir, json_path)
+    else:
+        rows = collect_nested(data_dir)
+
     df = pd.DataFrame(rows)
     if len(df) == 0:
-        raise ValueError(f"No .npy files found under {data_dir}")
-    
-    # Log initial distribution
-    logger.info(f"Total samples found: {len(df)}")
-    logger.info(f"Class distribution:\n{df['label'].value_counts().to_string()}")
-    
-    # Check for classes with insufficient samples
-    min_samples_per_class = df['label'].value_counts().min()
-    if min_samples_per_class < 3:
-        warning_msg = f"WARNING: Some classes have fewer than 3 samples (min={min_samples_per_class}). Stratified split may fail."
-        logger.warning(warning_msg)
-    
-    # Calculate test ratio
-    test_ratio = 1.0 - train_ratio - val_ratio
-    
-    # First split: separate train+val from test (stratified)
-    train_val_df, test_df = train_test_split(
-        df, 
-        test_size=test_ratio, 
-        random_state=seed, 
-        stratify=df['label']
-    )
-    
-    # Second split: separate train from val (stratified)
-    # Adjust val_ratio relative to train+val size
-    val_ratio_adjusted = val_ratio / (train_ratio + val_ratio)
-    train_df, val_df = train_test_split(
-        train_val_df, 
-        test_size=val_ratio_adjusted, 
-        random_state=seed, 
-        stratify=train_val_df['label']
-    )
-    
-    # Create output directory
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    
-    # Save splits to CSV
-    train_df.to_csv(os.path.join(output_dir, 'train.csv'), index=False)
-    val_df.to_csv(os.path.join(output_dir, 'val.csv'), index=False)
-    test_df.to_csv(os.path.join(output_dir, 'test.csv'), index=False)
-    
-    # Log results
-    summary = f"""
-Saved splits to {output_dir}:
-Total samples: {len(df)}s
-Train samples: {len(train_df)} ({len(train_df)/len(df)*100:.1f}%)
-Val samples: {len(val_df)} ({len(val_df)/len(df)*100:.1f}%)
-Test samples: {len(test_df)} ({len(test_df)/len(df)*100:.1f}%)
+        raise ValueError(f"No video files found under {data_dir}")
 
-Train class distribution:
+    logger.info(f"Total samples: {len(df)}")
+    logger.info(f"Class distribution:\n{df['label'].value_counts().to_string()}")
+
+    # Check for classes too small
+    if df["label"].value_counts().min() < 3:
+        logger.warning("Some classes have <3 samples → stratification may fail")
+
+    test_ratio = 1.0 - train_ratio - val_ratio
+
+    # 1) Split test
+    train_val_df, test_df = train_test_split(
+        df,
+        test_size=test_ratio,
+        random_state=seed,
+        stratify=df["label"]
+    )
+
+    # 2) Split train/val
+    val_adj = val_ratio / (train_ratio + val_ratio)
+
+    train_df, val_df = train_test_split(
+        train_val_df,
+        test_size=val_adj,
+        random_state=seed,
+        stratify=train_val_df["label"]
+    )
+
+    # Create output tree
+    for split in ["train", "val", "test"]:
+        os.makedirs(os.path.join(output_dir, split), exist_ok=True)
+
+    # Move videos
+    move_files(train_df, "train", output_dir)
+    move_files(val_df, "val", output_dir)
+    move_files(test_df, "test", output_dir)
+
+    summary = f"""
+[SUMMARY]
+Saved videos to: {output_dir}
+
+Total:  {len(df)}
+Train:  {len(train_df)} ({len(train_df)/len(df)*100:.1f}%)
+Val:    {len(val_df)} ({len(val_df)/len(df)*100:.1f}%)
+Test:   {len(test_df)} ({len(test_df)/len(df)*100:.1f}%)
+
+Train distribution:
 {train_df['label'].value_counts().to_string()}
 
-Val class distribution:
+Val distribution:
 {val_df['label'].value_counts().to_string()}
 
-Test class distribution:
+Test distribution:
 {test_df['label'].value_counts().to_string()}
 """
     logger.info(summary)
 
-if __name__ == '__main__':
-    p = argparse.ArgumentParser(description='Split dataset with stratified sampling to ensure balanced class distribution')
-    p.add_argument('--data_dir', default='data/npy', help='Directory containing .npy files organized by label')
-    p.add_argument('--output_dir', default='data/splits', help='Output directory for train/val/test CSV files')
-    p.add_argument('--train_ratio', type=float, default=0.7, help='Ratio of training samples (default: 0.7)')
-    p.add_argument('--val_ratio', type=float, default=0.15, help='Ratio of validation samples (default: 0.15)')
-    p.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility (default: 42)')
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description="Split dataset and MOVE actual videos into folders.")
+    p.add_argument("--data_dir", default="data/raw", help="Directory containing videos")
+    p.add_argument("--output_dir", default="data/split", help="Output split dataset directory")
+    p.add_argument("--json", default=None, help="JSON mapping path (required for flat mode)")
+    p.add_argument("--flat", action="store_true", help="Use flat mode (videos directly inside data_dir)")
+    p.add_argument("--train_ratio", type=float, default=0.7)
+    p.add_argument("--val_ratio", type=float, default=0.15)
+    p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
 
     logger = setup_logger("split_dataset")
     log_arguments(logger=logger, args=args)
-    
-    # Validate ratios
-    if args.train_ratio + args.val_ratio >= 1.0:
-        raise ValueError(f"train_ratio ({args.train_ratio}) + val_ratio ({args.val_ratio}) must be < 1.0")
-    
-    split_dataset(args.data_dir, args.output_dir, args.train_ratio, args.val_ratio, args.seed)
+
+    split_dataset(
+        args.data_dir,
+        args.output_dir,
+        json_path=args.json,
+        flat=args.flat,
+        train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
+        seed=args.seed
+    )
