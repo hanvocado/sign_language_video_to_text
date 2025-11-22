@@ -2,10 +2,11 @@ import os, sys, argparse, time
 from collections import deque
 import cv2, numpy as np, torch
 from src.utils.utils import load_label_map, load_checkpoint
-from src.model.model import build_model
+from src.model.train import build_model
 from src.config.config import DEVICE
 import mediapipe as mp
 from src.utils.common_functions import *
+from src.config.config import *
 
 mp_holistic = mp.solutions.holistic
 
@@ -17,7 +18,16 @@ def realtime(args):
 
     # Load label map + model
     label_list = load_label_map(args.label_map)
-    model = build_model(num_classes=len(label_list), input_dim=args.input_dim).to(DEVICE)
+    model = build_model(
+        MODEL_TYPE,
+        INPUT_DIM,
+        HIDDEN_DIM,
+        len(label_list),
+        NUM_LAYERS,
+        DROPOUT,
+        BIDIRECTIONAL,
+    ).to(DEVICE)
+
     ck = load_checkpoint(args.ckpt, device=DEVICE)
     model.load_state_dict(ck['model_state'])
     model.eval()

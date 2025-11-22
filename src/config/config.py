@@ -19,8 +19,15 @@ for p in [DATA_DIR, RAW_DIR, NPY_DIR, SPLIT_DIR, MODEL_DIR, CKPT_DIR]:
 # Feature dimensions after extracting Pose(33*3) + LHand(21*3) + RHand(21*3)
 # Updated: removed face landmarks, added pose landmarks
 FEATURE_DIM = 225  # 99 + 63 + 63 = 225
-SEQ_LEN = 64
-BATCH_SIZE = 32
+SEQ_LEN = 30
+BATCH_SIZE = 16
 LR = 1e-3
-EPOCHS = 40
+EPOCHS = 200
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+MODEL_TYPE = 'gru'
+INPUT_DIM = FEATURE_DIM
+HIDDEN_DIM = 64
+NUM_LAYERS = 2
+DROPOUT = 0.6
+BIDIRECTIONAL = False
