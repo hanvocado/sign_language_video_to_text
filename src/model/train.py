@@ -485,12 +485,12 @@ if __name__ == '__main__':
     
     # Model
     parser.add_argument('--model_type', choices=['lstm', 'bilstm', 'gru'], 
-                        default='lstm', help='Model architecture')
-    parser.add_argument('--hidden_dim', type=int, default=128,
+                        default='gru', help='Model architecture')
+    parser.add_argument('--hidden_dim', type=int, default=64,
                         help='Hidden dimension')
-    parser.add_argument('--num_layers', type=int, default=1,
+    parser.add_argument('--num_layers', type=int, default=2,
                         help='Number of RNN layers')
-    parser.add_argument('--dropout', type=float, default=0.5,
+    parser.add_argument('--dropout', type=float, default=0.6,
                         help='Dropout rate')
     parser.add_argument('--bidirectional', action='store_true',
                         help='Use bidirectional RNN')
@@ -498,13 +498,13 @@ if __name__ == '__main__':
     # Training
     parser.add_argument('--batch_size', type=int, default=16,
                         help='Batch size')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=0.005,
                         help='Learning rate')
-    parser.add_argument('--weight_decay', type=float, default=1e-4,
+    parser.add_argument('--weight_decay', type=float, default=1e-3,
                         help='Weight decay')
-    parser.add_argument('--label_smoothing', type=float, default=0.1,
+    parser.add_argument('--label_smoothing', type=float, default=0.2,
                         help='Label smoothing')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=200,
                         help='Maximum epochs')
     parser.add_argument('--patience', type=int, default=20,
                         help='Early stopping patience')
