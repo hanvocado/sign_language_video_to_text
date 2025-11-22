@@ -25,7 +25,7 @@ mp_holistic = mp.solutions.holistic
 
 
 # =====================================================
-# Frame Sampling (from VideoFrameGenerator)
+# Frame Sampling
 # =====================================================
 
 def get_chunks(l, n):
@@ -191,9 +191,9 @@ def augment_keypoints(seq, config=None):
     """
     if config is None:
         config = {
-            'rotation_range': 10,      # degrees
-            'scale_range': (0.9, 1.1),
-            'shift_range': 0.05,
+            'rotation_range': 15,      # degrees
+            'scale_range': (0.85, 1.15),
+            'shift_range': 0.08,
             'flip_prob': 0.5,
             'time_mask_prob': 0.2,
             'time_mask_max': 3,
