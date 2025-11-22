@@ -5,33 +5,9 @@ from src.utils.utils import load_label_map, load_checkpoint
 from src.model.model import build_model
 from src.config.config import DEVICE
 import mediapipe as mp
+from src.utils.common_functions import *
 
 mp_holistic = mp.solutions.holistic
-
-
-def extract_keypoints(results):
-    pose, lh, rh = [], [], []
-
-    if results.pose_landmarks:
-        for lm in results.pose_landmarks.landmark:
-            pose.extend([lm.x, lm.y, lm.z])
-    else:
-        pose = [0.0] * 33 * 3
-
-    if results.left_hand_landmarks:
-        for lm in results.left_hand_landmarks.landmark:
-            lh.extend([lm.x, lm.y, lm.z])
-    else:
-        lh = [0.0] * 21 * 3
-
-    if results.right_hand_landmarks:
-        for lm in results.right_hand_landmarks.landmark:
-            rh.extend([lm.x, lm.y, lm.z])
-    else:
-        rh = [0.0] * 21 * 3
-
-    return np.array(pose + lh + rh, dtype=np.float32)
-
 
 def realtime(args):
     DISPLAY_DURATION = 1.5
@@ -39,6 +15,7 @@ def realtime(args):
     last_pred_conf = None
     last_pred_time = 0
 
+    # Load label map + model
     label_list = load_label_map(args.label_map)
     model = build_model(num_classes=len(label_list), input_dim=args.input_dim).to(DEVICE)
     ck = load_checkpoint(args.ckpt, device=DEVICE)
@@ -53,11 +30,11 @@ def realtime(args):
     )
 
     prev_gray = None
-    MOTION_THRESHOLD = 3            # tune 8–20
-    STILL_FRAMES_REQUIRED = 8       # motion below threshold for N frames = sign finished
+    MOTION_THRESHOLD = 3
+    STILL_FRAMES_REQUIRED = 8
 
     state = "waiting"
-    segment = []                    # store variable-length sign frames
+    segment = []
     still_count = 0
 
     try:
@@ -66,7 +43,9 @@ def realtime(args):
             if not ret:
                 break
 
-            # --- Motion detection ---
+            # ---------------------------------------------
+            # Motion detection (FSM trigger)
+            # ---------------------------------------------
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if prev_gray is None:
                 prev_gray = gray
@@ -79,10 +58,9 @@ def realtime(args):
 
             movement = motion_level > MOTION_THRESHOLD
 
-            # ------------------------------------------------------------------
-            # FSM (Finite State Machine)
-            # ------------------------------------------------------------------
-
+            # ---------------------------------------------
+            # STATE MACHINE
+            # ---------------------------------------------
             if state == "waiting":
                 cv2.putText(frame, "Waiting for sign...", (10,40),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,0,255), 3)
@@ -96,10 +74,10 @@ def realtime(args):
                 cv2.putText(frame, f"Recording ({len(segment)} frames)", (10,40),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0,255,255), 3)
 
-                # collect keypoints
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = holistic.process(image)
-                vec = extract_keypoints(results)
+                # ---- Extract keypoints for this frame ----
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = holistic.process(rgb)
+                vec = extract_keypoints(results)  # from utils
                 segment.append(vec)
 
                 if movement:
@@ -107,23 +85,31 @@ def realtime(args):
                 else:
                     still_count += 1
 
-                # Sign ends → movement stopped long enough
+                # ---------------------------------------------------
+                # SIGN COMPLETE — STOPPED MOVING
+                # ---------------------------------------------------
                 if still_count >= STILL_FRAMES_REQUIRED:
-                    # -----------------------------------------------------------
-                    # PROCESS SEGMENT
-                    # -----------------------------------------------------------
+
                     if len(segment) > 0:
-                        arr = np.array(segment, dtype=np.float32)
 
-                        # pad or interpolate to seq_len
-                        if len(arr) < seq_len:
-                            pad = np.zeros((seq_len - len(arr), arr.shape[1]), dtype=np.float32)
-                            arr = np.concatenate([arr, pad], axis=0)
-                        else:
-                            arr = arr[:seq_len]
+                        raw_arr = np.array(segment, dtype=np.float32)
+                        total_frames = len(raw_arr)
 
-                        X = torch.from_numpy(arr).unsqueeze(0).to(DEVICE)
+                        # -------------------------------
+                        # FRAME SAMPLING
+                        # -------------------------------
+                        indices = sample_frames(total_frames, seq_len, mode="2")
+                        sampled = raw_arr[indices]
 
+                        # -------------------------------
+                        # KEYPOINT NORMALIZATION
+                        # -------------------------------
+                        sampled = normalize_keypoints(sampled)
+
+                        # convert to tensor
+                        X = torch.from_numpy(sampled).unsqueeze(0).to(DEVICE)
+
+                        # run model
                         with torch.no_grad():
                             logits = model(X)
                             probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
@@ -136,14 +122,15 @@ def realtime(args):
                         last_pred_conf = conf
                         last_pred_time = time.time()
 
-                        cv2.putText(frame, f"{label} ({conf:.2f})",
-                                    (10,80), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,0), 3)
+                        cv2.putText(frame, f"{label} ({conf:.2f})", (10,80),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,0), 3)
 
-                    # reset and go back to waiting
+                    # reset FSM
                     state = "waiting"
                     segment = []
                     still_count = 0
-            
+
+            # keep last prediction on screen
             if last_pred_label is not None:
                 if time.time() - last_pred_time <= DISPLAY_DURATION:
                     cv2.putText(frame, f"{last_pred_label} ({last_pred_conf:.2f})",
