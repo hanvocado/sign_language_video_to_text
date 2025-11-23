@@ -9,95 +9,16 @@ Includes runtime augmentation for training.
 """
 
 import os
-import sys
-import itertools
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import cv2
 import mediapipe as mp
-
-# Optional: for pre-extracted files
 import joblib
+from src.utils.common_functions import *
 
 mp_holistic = mp.solutions.holistic
-
-
-# =====================================================
-# Frame Sampling
-# =====================================================
-
-def get_chunks(l, n):
-    """Divide list into n chunks"""
-    k, m = divmod(len(l), n)
-    return (l[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
-
-
-def sampling_mode_1(chunks):
-    """Select frames: last for first 2, first for last 2, center for rest"""
-    sampling = []
-    for i, chunk in enumerate(chunks):
-        if i == 0 or i == 1:
-            sampling.append(chunk[-1])
-        elif i == len(chunks) - 1 or i == len(chunks) - 2:
-            sampling.append(chunk[0])
-        else:
-            sampling.append(chunk[len(chunk) // 2])
-    return sampling
-
-
-def sampling_mode_2(frames, n_sequence):
-    """Pre-sample to remove idle frames, then apply mode 1"""
-    if len(frames) < 12:
-        # Fallback for very short videos
-        return sampling_mode_1(list(get_chunks(frames, n_sequence)))
-    
-    chunks = list(get_chunks(frames, 12))
-    sub_chunks = chunks[1:-1]  # Remove first and last chunk
-    sub_frame_list = list(itertools.chain.from_iterable(sub_chunks))
-    new_chunks = list(get_chunks(sub_frame_list, n_sequence))
-    return sampling_mode_1(new_chunks)
-
-
-def sample_frame_indices(total_frames, seq_len, mode="2"):
-    """Get frame indices to sample from video"""
-    frames = list(range(total_frames))
-    if mode == "1":
-        return sampling_mode_1(list(get_chunks(frames, seq_len)))
-    if mode == "2":
-        return sampling_mode_2(frames, seq_len)
-    raise ValueError(f"Invalid sampling mode: {mode}")
-
-
-# =====================================================
-# Keypoint Extraction
-# =====================================================
-
-def extract_keypoints(results):
-    """Extract pose + hands keypoints from MediaPipe results"""
-    pose, lh, rh = [], [], []
-
-    if results.pose_landmarks:
-        for lm in results.pose_landmarks.landmark:
-            pose.extend([lm.x, lm.y, lm.z])
-    else:
-        pose = [0.0] * 33 * 3
-
-    if results.left_hand_landmarks:
-        for lm in results.left_hand_landmarks.landmark:
-            lh.extend([lm.x, lm.y, lm.z])
-    else:
-        lh = [0.0] * 21 * 3
-
-    if results.right_hand_landmarks:
-        for lm in results.right_hand_landmarks.landmark:
-            rh.extend([lm.x, lm.y, lm.z])
-    else:
-        rh = [0.0] * 21 * 3
-
-    return np.array(pose + lh + rh, dtype=np.float32)
-
 
 def extract_keypoints_from_video(video_path, seq_len, sampling_mode="2"):
     """Extract keypoints sequence from video file"""
@@ -108,7 +29,7 @@ def extract_keypoints_from_video(video_path, seq_len, sampling_mode="2"):
         cap.release()
         return np.zeros((seq_len, 225), dtype=np.float32)
     
-    indices = sample_frame_indices(total_frames, seq_len, mode=sampling_mode)
+    indices = sample_frames(total_frames, seq_len, mode=sampling_mode)
     
     seq = []
     with mp_holistic.Holistic(
@@ -397,99 +318,6 @@ class SignLanguageDataset(Dataset):
     def get_label_map(self):
         """Return label mapping for saving/loading"""
         return self.idx_to_label
-
-
-class SignLanguageDatasetFromCSV(Dataset):
-    """
-    Alternative dataset that loads from a CSV index file.
-    
-    CSV format:
-        path,label
-        /path/to/file.npy,hello
-        ...
-    """
-    
-    def __init__(
-        self,
-        index_csv,
-        seq_len=30,
-        normalize=True,
-        augment=False,
-        augment_config=None,
-        label_map=None,
-        scaler_path=None,
-    ):
-        self.df = pd.read_csv(index_csv)
-        self.df = self.df.dropna(subset=['path', 'label'])
-        self.df['label'] = self.df['label'].astype(str)
-        
-        self.seq_len = seq_len
-        self.normalize = normalize
-        self.augment = augment
-        self.augment_config = augment_config
-        
-        # Load scaler
-        self.scaler = None
-        if scaler_path and os.path.exists(scaler_path):
-            self.scaler = joblib.load(scaler_path)
-        
-        # Build label mapping
-        if label_map is None:
-            labels = sorted(self.df['label'].unique().tolist())
-            self.label_to_idx = {l: i for i, l in enumerate(labels)}
-            self.idx_to_label = labels
-        else:
-            if isinstance(label_map, dict):
-                self.label_to_idx = label_map
-                self.idx_to_label = [None] * (max(label_map.values()) + 1)
-                for k, v in label_map.items():
-                    self.idx_to_label[v] = k
-            elif isinstance(label_map, list):
-                self.idx_to_label = label_map
-                self.label_to_idx = {l: i for i, l in enumerate(label_map)}
-            else:
-                raise ValueError("label_map must be dict or list")
-    
-    def __len__(self):
-        return len(self.df)
-    
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        path = row['path']
-        label = row['label']
-        
-        arr = np.load(path)
-        
-        # Pad/truncate
-        if arr.shape[0] < self.seq_len:
-            pad = np.zeros((self.seq_len - arr.shape[0], arr.shape[1]), dtype=np.float32)
-            arr = np.vstack([arr, pad])
-        elif arr.shape[0] > self.seq_len:
-            arr = arr[:self.seq_len]
-        
-        # Augment before normalize
-        if self.augment:
-            arr = augment_keypoints(arr, self.augment_config)
-        
-        # Normalize
-        if self.normalize:
-            arr = normalize_keypoints(arr)
-        
-        # Scale
-        if self.scaler is not None:
-            frames = [self.scaler.transform(f.reshape(1, -1)).reshape(-1) for f in arr]
-            arr = np.stack(frames, axis=0).astype(np.float32)
-        
-        label_idx = self.label_to_idx[label]
-        
-        return (
-            torch.from_numpy(arr).float(),
-            torch.tensor(label_idx, dtype=torch.long)
-        )
-    
-    def get_label_map(self):
-        return self.idx_to_label
-
 
 # =====================================================
 # Utility Functions
