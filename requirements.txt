@@ -7,3 +7,12 @@ pandas
 scikit-learn
 joblib
 tqdm
+
+# Web framework
+flask>=2.0.0
+flask-socketio>=5.0.0
+python-socketio>=5.0.0
+python-engineio>=4.0.0
+
+# Additional utilities
+pillow>=8.0.0
