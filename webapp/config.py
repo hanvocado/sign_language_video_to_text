@@ -58,8 +58,9 @@ class ModelConfig:
     MODELS_DIR = PROJECT_ROOT / 'models'
     CHECKPOINTS_DIR = MODELS_DIR / 'checkpoints'
     
-    MODEL_PATH = CHECKPOINTS_DIR / 'best.pth'
-    LABEL_MAP_PATH = CHECKPOINTS_DIR / 'label_map.json'
+    # Use vsl_v1 model (97.77% val_acc) - best performing model for Vietnamese Sign Language
+    MODEL_PATH = CHECKPOINTS_DIR / 'vsl_v1' / 'best.pth'
+    LABEL_MAP_PATH = CHECKPOINTS_DIR / 'vsl_v1' / 'label_map.json'
     
     # Model parameters
     INPUT_SIZE = 225  # 75 landmarks * 3 (x, y, z)

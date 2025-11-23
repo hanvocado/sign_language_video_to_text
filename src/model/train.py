@@ -16,7 +16,6 @@ Features:
 """
 
 import os
-import sys
 import argparse
 import time
 import json
@@ -30,7 +29,7 @@ from sklearn.metrics import accuracy_score, classification_report
 # Import from project
 from src.model.data_loader import SignLanguageDataset, create_data_loaders
 from src.utils.logger import *
-
+from src.config.config import *
 
 # =====================================================
 # Models
@@ -104,8 +103,12 @@ class SimpleGRU(nn.Module):
 
 
 def build_model(model_type, input_dim, hidden_dim, num_classes, 
-                num_layers=1, dropout=0.3, bidirectional=False):
+                num_layers, dropout, bidirectional=False):
     """Build model based on type"""
+    if model_type not in ['lstm', 'bilstm', 'gru']:
+        raise ValueError(f"Unknown model type: {model_type}")
+    if num_classes <= 0 or num_layers <= 0:
+        raise ValueError("num_classes, num_layers must be specified and greater than 0")
     if model_type == 'lstm':
         return SimpleLSTM(input_dim, hidden_dim, num_classes, dropout)
     elif model_type == 'bilstm':
@@ -476,21 +479,21 @@ if __name__ == '__main__':
     # Data
     parser.add_argument('--data_dir', default='data/wlasl/wlasl100',
                         help='Root directory with train/val/test subdirs')
-    parser.add_argument('--source', choices=['npy', 'video'], default='video',
+    parser.add_argument('--source', choices=['npy', 'video'], default='npy',
                         help='Load from .npy files or extract from videos')
-    parser.add_argument('--seq_len', type=int, default=10,
+    parser.add_argument('--seq_len', type=int, default=SEQ_LEN,
                         help='Fixed sequence length')
-    parser.add_argument('--input_dim', type=int, default=225,
+    parser.add_argument('--input_dim', type=int, default=INPUT_DIM,
                         help='Input feature dimension (225 for pose+hands)')
     
     # Model
     parser.add_argument('--model_type', choices=['lstm', 'bilstm', 'gru'], 
-                        default='gru', help='Model architecture')
-    parser.add_argument('--hidden_dim', type=int, default=64,
+                        default=MODEL_TYPE, help='Model architecture')
+    parser.add_argument('--hidden_dim', type=int, default=HIDDEN_DIM,
                         help='Hidden dimension')
-    parser.add_argument('--num_layers', type=int, default=2,
+    parser.add_argument('--num_layers', type=int, default=NUM_LAYERS,
                         help='Number of RNN layers')
-    parser.add_argument('--dropout', type=float, default=0.6,
+    parser.add_argument('--dropout', type=float, default=DROPOUT,
                         help='Dropout rate')
     parser.add_argument('--bidirectional', action='store_true',
                         help='Use bidirectional RNN')

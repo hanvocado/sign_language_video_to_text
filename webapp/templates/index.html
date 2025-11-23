@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vietnamese Sign Language Recognition - Real-time</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1 id="title">🤟 Vietnamese Sign Language Recognition</h1>
+        <p class="subtitle">Real-Time Detection - FSM-based Recognition!</p>
+        <div class="instructions">
+            <p>✋ <strong>How it works:</strong></p>
+            <ul>
+                <li>👉 Perform a gesture in front of the camera</li>
+                <li>🎬 When motion detected: recording starts automatically</li>
+                <li>⏸️ When you stop moving: gesture is recognized</li>
+                <li>✅ Result displays with confidence score</li>
+            </ul>
+            <p style="color: #ff6b6b; font-weight: bold;">⚠️ Key: The app uses motion detection (FSM) for accurate recognition!</p>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Video Section -->
+        <div class="video-section">
+            <div id="container" class="video-container">
+                <canvas id="canvasOutput" style="display:none;"></canvas>
+                <video autoplay playsinline id="videoElement" class="video-stream"></video>
+            </div>
+            <div class="info-box">
+                <p><strong>Server Status:</strong> <span id="status" class="status-connecting">🔌 Connecting...</span></p>
+                <p><strong>FSM State:</strong> <span id="fsm-state" class="state-waiting">⏳ Waiting</span></p>
+                <p><strong>Segment Size:</strong> <span id="segment-size">0</span> frames</p>
+                <p><strong>Still Frames:</strong> <span id="still-count">0</span> / 8</p>
+            </div>
+        </div>
+
+        <!-- Control & Display Section -->
+        <div class="control-section">
+            <!-- Prediction Display -->
+            <div class="prediction-box">
+                <div class="prediction-label" id="prediction-label">🔍 Waiting for gesture...</div>
+                <div class="prediction-confidence" id="prediction-confidence">Confidence: --</div>
+                <div class="prediction-frames" id="prediction-frames">Frames analyzed: --</div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="stats-box">
+                <h3>Statistics</h3>
+                <p>Total Predictions: <span id="total-predictions">0</span></p>
+                <div id="history" class="history-log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>
