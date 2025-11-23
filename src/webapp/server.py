@@ -70,8 +70,6 @@ socketio = SocketIO(
 )
 
 # Model inference
-FEATURE_DIM = 225
-SEQ_LEN = 64  # Match infer_realtime.py default
 MIN_PREDICTION_CONFIDENCE = 0.35  # Require at least 35% confidence to make prediction
 
 # FSM States

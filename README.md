@@ -71,7 +71,7 @@ sign-language-recognition/
    Ứng dụng web real-time nhận diện ngôn ngữ kí hiệu thông qua webcam.
 
    **Tính năng:**
-   - Real-time video capture từ webcam (25 FPS)
+   - Real-time video capture từ webcam 
    - Phát hiện chuyển động (Motion Detection FSM)
    - Nhận diện ký hiệu tự động
    - Hiển thị kết quả với độ tin cậy (confidence)
