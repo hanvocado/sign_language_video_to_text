@@ -63,7 +63,7 @@ sign-language-recognition/
 
 7. Realtime inference:
    ```bash
-   python -m src.infer_realtime --ckpt models/checkpoints/best.pth --label_map models/checkpoints/label_map.json
+   python -m src.infer_realtime --ckpt models/checkpoints/vsl_v1/best.pth --label_map models/checkpoints/vsl_v1/label_map.json --seq_len 30
    ```
 
 ## Ghi chú kỹ thuật
