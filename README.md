@@ -86,7 +86,7 @@ sign-language-recognition/
 
    b. Khởi động Flask server:
    ```bash
-   python webapp/server.py
+   python .\src\webapp\server.py
    ```
 
    c. Mở browser và truy cập: `http://localhost:5000`

@@ -27,7 +27,7 @@ from flask_socketio import SocketIO, emit
 from collections import deque
 
 # Import from project
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.model.train import build_model
 from src.utils.utils import load_label_map, load_checkpoint
 from src.utils.common_functions import (
@@ -336,11 +336,11 @@ def initialize_app(model_path, label_map_path):
 if __name__ == '__main__':
     # Default paths - use vsl_v1 model (97.77% val_acc, better than best.pth's 82.22%)
     model_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         'models/checkpoints/vsl_v1/best.pth'
     )
     label_map_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         'models/checkpoints/vsl_v1/label_map.json'
     )
     
