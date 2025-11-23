@@ -48,6 +48,23 @@ def normalize_keypoints(seq, left_wrist_idx=15, right_wrist_idx=16):
 # Keypoint Extraction
 # =====================================================
 
+def is_pose_detected(results, visibility_threshold=0.5):
+    """
+    Check if pose was actually detected (not just false positives).
+    Returns True if at least 8 pose landmarks have visibility > threshold.
+    """
+    if results.pose_landmarks is None:
+        return False
+    
+    visible_count = 0
+    for lm in results.pose_landmarks.landmark:
+        if hasattr(lm, 'visibility') and lm.visibility > visibility_threshold:
+            visible_count += 1
+    
+    # Need at least 8 visible landmarks to consider it a valid pose
+    return visible_count >= 8
+
+
 def extract_keypoints(results):
     pose, lh, rh = [], [], []
 

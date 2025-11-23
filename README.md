@@ -66,6 +66,53 @@ sign-language-recognition/
    python -m src.infer_realtime --ckpt models/checkpoints/vsl_v1/best.pth --label_map models/checkpoints/vsl_v1/label_map.json --seq_len 30
    ```
 
+8. **Web Application (Webapp):**
+
+   Ứng dụng web real-time nhận diện ngôn ngữ kí hiệu thông qua webcam.
+
+   **Tính năng:**
+   - Real-time video capture từ webcam 
+   - Phát hiện chuyển động (Motion Detection FSM)
+   - Nhận diện ký hiệu tự động
+   - Hiển thị kết quả với độ tin cậy (confidence)
+   - Lịch sử dự đoán
+
+   **Cách chạy:**
+
+   a. Cài đặt dependencies cho webapp (nếu chưa có):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   b. Khởi động Flask server:
+   ```bash
+   python .\src\webapp\server.py
+   ```
+
+   c. Mở browser và truy cập: `http://localhost:5000`
+
+   d. Cho phép truy cập webcam khi popup yêu cầu.
+
+   **Cấu hình Webapp:**
+
+   File `webapp/config.py` chứa các tham số:
+   - `MODEL_PATH`: Đường dẫn đến model checkpoint (mặc định: `models/checkpoints/vsl_v1/best.pth`)
+   - `LABEL_MAP_PATH`: Đường dẫn đến label map (mặc định: `models/checkpoints/vsl_v1/label_map.json`)
+   - `MIN_PREDICTION_CONFIDENCE`: Ngưỡng độ tin cậy tối thiểu (mặc định: 0.35)
+   - `STILL_FRAMES_REQUIRED`: Số frame không chuyển động để kết thúc ghi nhận (mặc định: 8)
+
+   **Cấu trúc Webapp:**
+   ```
+   webapp/
+   ├── server.py              # Flask server chính
+   ├── config.py              # Cấu hình
+   ├── static/
+   │   ├── app.js            # Logic capture & Socket.IO
+   │   └── style.css         # CSS
+   └── templates/
+       └── index.html        # HTML giao diện
+   ```
+
 ## Ghi chú kỹ thuật
 
 - Feature vector hiện tại: **pose (33*3) + left hand (21*3) + right hand (21\*3) = 225** chiều.
