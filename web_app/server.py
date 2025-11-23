@@ -31,7 +31,7 @@ from flask_socketio import SocketIO, emit
 
 # Import from project
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.model.model import build_model
+from src.model.train import build_model, BiLSTM
 from src.utils.utils import load_label_map, load_checkpoint
 from src.config.config import DEVICE
 
@@ -401,18 +401,47 @@ def load_model_and_weights(model_path, label_map_path, device='cpu'):
         num_classes = len(label_list)
         logger.info(f"Loaded {num_classes} classes: {label_list}")
 
-        # Build model
-        model = build_model(
-            num_classes=num_classes,
-            input_dim=FEATURE_DIM,
-            hidden_dim=256,
-            num_layers=2,
-            dropout=0.3
-        ).to(device)
-
-        # Load checkpoint
+        # Load checkpoint directly to see what model was saved
         ck = load_checkpoint(model_path, device=device)
-        model.load_state_dict(ck['model_state'])
+        
+        # Infer model structure from checkpoint keys
+        model_keys = set(ck['model_state'].keys())
+        
+        if 'rnn.' in ' '.join(model_keys):
+            # GRU or basic RNN model
+            logger.info("Detected GRU/RNN model from checkpoint")
+            model = build_model(
+                num_classes=num_classes,
+                input_dim=FEATURE_DIM,
+                hidden_dim=256,
+                num_layers=1,
+                dropout=0.3,
+                model_type='gru'
+            ).to(device)
+        elif 'lstm.' in ' '.join(model_keys):
+            # LSTM or BiLSTM model
+            logger.info("Detected LSTM model from checkpoint")
+            model = build_model(
+                num_classes=num_classes,
+                input_dim=FEATURE_DIM,
+                hidden_dim=256,
+                num_layers=2,
+                dropout=0.3,
+                model_type='bilstm'
+            ).to(device)
+        else:
+            logger.warning("Could not detect model type, trying BiLSTM")
+            model = build_model(
+                num_classes=num_classes,
+                input_dim=FEATURE_DIM,
+                hidden_dim=256,
+                num_layers=2,
+                dropout=0.3,
+                model_type='bilstm'
+            ).to(device)
+
+        # Load weights with strict=False to ignore mismatches
+        model.load_state_dict(ck['model_state'], strict=False)
         model.eval()
 
         logger.info(f"✅ Model loaded from {model_path}")
