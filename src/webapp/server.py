@@ -47,6 +47,7 @@ from src.config.config import (
     FEATURE_DIM,
     SEQ_LEN,
 )
+from src.webapp.config import ModelConfig
 
 # Suppress warnings
 import logging
@@ -334,15 +335,9 @@ def initialize_app(model_path, label_map_path):
 
 
 if __name__ == '__main__':
-    # Default paths - use vsl_v1 model (97.77% val_acc, better than best.pth's 82.22%)
-    model_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'models/checkpoints/vsl_v1/best.pth'
-    )
-    label_map_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'models/checkpoints/vsl_v1/label_map.json'
-    )
+    # Use ModelConfig for paths (vsl_v1 model with 97.77% val_acc)
+    model_path = str(ModelConfig.MODEL_PATH)
+    label_map_path = str(ModelConfig.LABEL_MAP_PATH)
     
     initialize_app(model_path, label_map_path)
     
