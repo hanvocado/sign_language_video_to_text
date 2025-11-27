@@ -5,142 +5,23 @@ frame sampling (no padding/truncate).
 Sampling:
 - Apply frame sampling, ensure uniform coverage of the signing motion, regardless of video length.
 - Always returns exactly seq_len frames.
+
+Supports any directory structure:
+- Flat: input_dir/video.mp4 → output_dir/video.npy
+- Nested: input_dir/label/video.mp4 → output_dir/label/video.npy
+- Deeply nested: input_dir/a/b/c/video.mp4 → output_dir/a/b/c/video.npy
 """
 
 import os, cv2, numpy as np, argparse
 from pathlib import Path
-import itertools
 import mediapipe as mp
 from src.config.config import SEQ_LEN
 from src.utils.logger import *
+from src.utils.common_functions import *
 
 mp_holistic = mp.solutions.holistic
 
-
-# =====================================================
-# Frame Sampling
-# =====================================================
-
-def get_chunks(l, n):
-    """
-    Divide list `l` into `n` chunks as evenly as possible.
-    Guarantees: never returns empty chunks.
-    """
-    if len(l) == 0:
-        return [[] for _ in range(n)]
-
-    if len(l) < n:
-        # pad by repeating the last element
-        l = l + [l[-1]] * (n - len(l))
-
-    k, m = divmod(len(l), n)
-    chunks = [
-        l[i * k + min(i, m):(i + 1) * k + min(i + 1, m)]
-        for i in range(n)
-    ]
-
-    # Final safety: ensure no empty chunk
-    for i in range(n):
-        if len(chunks[i]) == 0:
-            chunks[i] = [l[-1]]
-
-    return chunks
-
-
-def safe_pick(chunk, pick_index):
-    """Pick element safely from chunk."""
-    if len(chunk) == 0:
-        return 0
-    pick_index = min(max(pick_index, 0), len(chunk) - 1)
-    return chunk[pick_index]
-
-
-def sampling_mode_1(chunks):
-    """
-    Your original logic but safe for short videos.
-    """
-    sampling = []
-    L = len(chunks)
-
-    for i, chunk in enumerate(chunks):
-        if i == 0 or i == 1:
-            sampling.append(safe_pick(chunk, -1))
-        elif i == L - 1 or i == L - 2:
-            sampling.append(safe_pick(chunk, 0))
-        else:
-            sampling.append(safe_pick(chunk, len(chunk) // 2))
-
-    return sampling
-
-
-def sampling_mode_2(frames, n_sequence):
-    """
-    Remove idle frames (first+last chunk's worth), then sample n_sequence frames.
-    Works even if frames < 12.
-    """
-
-    L = len(frames)
-
-    # If the video is too short for the full pre-sampling logic
-    if L < 12:
-        # fallback to uniform sampling
-        chunks = get_chunks(frames, n_sequence)
-        return sampling_mode_1(chunks)
-
-    # Normal mode:
-    chunks_12 = get_chunks(frames, 12)
-
-    # drop first + last chunk
-    middle = chunks_12[1:-1]
-
-    # flatten
-    sub_frame_list = [x for c in middle for x in c]
-
-    # If sub_frame_list becomes too small
-    if len(sub_frame_list) < n_sequence:
-        chunks = get_chunks(sub_frame_list, n_sequence)
-    else:
-        chunks = get_chunks(sub_frame_list, n_sequence)
-
-    return sampling_mode_1(chunks)
-
-
-def sample_frames(total_frames, seq_len, mode="2"):
-    frames = list(range(total_frames))
-    if mode == "1":
-        return sampling_mode_1(get_chunks(frames, seq_len))
-    elif mode == "2":
-        return sampling_mode_2(frames, seq_len)
-    else:
-        raise ValueError("Invalid sampling mode")
-
-# =====================================================
-# Keypoint extraction
-# =====================================================
-
-def extract_keypoints(results):
-    pose, lh, rh = [], [], []
-
-    if results.pose_landmarks:
-        for lm in results.pose_landmarks.landmark:
-            pose.extend([lm.x, lm.y, lm.z])
-    else:
-        pose = [0.0] * 33 * 3
-
-    if results.left_hand_landmarks:
-        for lm in results.left_hand_landmarks.landmark:
-            lh.extend([lm.x, lm.y, lm.z])
-    else:
-        lh = [0.0] * 21 * 3
-
-    if results.right_hand_landmarks:
-        for lm in results.right_hand_landmarks.landmark:
-            rh.extend([lm.x, lm.y, lm.z])
-    else:
-        rh = [0.0] * 21 * 3
-
-    return np.array(pose + lh + rh, dtype=np.float32)
-
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mov", ".mkv", ".webm")
 
 # =====================================================
 # Main conversion function
@@ -150,11 +31,16 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN,
                          sampling_mode="2", skip_existing=False):
 
     if skip_existing and os.path.exists(output_path):
-        logger.info(f"⏭️ Skip {video_path}: already exists")
-        return
+        logger.info(f"Skip {video_path}: already exists")
+        return "skipped"
 
     cap = cv2.VideoCapture(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if total == 0:
+        logger.warning(f"Skip {video_path}: cannot read frames (total=0)")
+        cap.release()
+        return "failed"
 
     # sample frame indices
     indices = sample_frames(total, seq_len, mode=sampling_mode)
@@ -181,37 +67,177 @@ def convert_video_to_npy(video_path, output_path, seq_len=SEQ_LEN,
     Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
     np.save(output_path, arr)
     logger.info(f"Saved {output_path}, shape={arr.shape}")
+    return "converted"
+
+
+def replace_video_extension(filename):
+    """Replace video extension with .npy"""
+    for ext in VIDEO_EXTENSIONS:
+        if filename.lower().endswith(ext):
+            return filename[:-len(ext)] + ".npy"
+    return filename + ".npy"
+
+
+def is_video_file(filename):
+    """Check if file is a video based on extension"""
+    return filename.lower().endswith(VIDEO_EXTENSIONS)
+
+
+def find_all_videos(input_dir):
+    """
+    Recursively find all video files in input_dir.
+    
+    Returns:
+        List of tuples: (absolute_path, relative_path)
+        - absolute_path: full path to video file
+        - relative_path: path relative to input_dir (preserves directory structure)
+    """
+    videos = []
+    input_dir = os.path.abspath(input_dir)
+    
+    for root, dirs, files in os.walk(input_dir):
+        # Sort for consistent ordering
+        dirs.sort()
+        files.sort()
+        
+        for f in files:
+            if is_video_file(f):
+                abs_path = os.path.join(root, f)
+                rel_path = os.path.relpath(abs_path, input_dir)
+                videos.append((abs_path, rel_path))
+    
+    return videos
+
+
+def get_directory_structure_info(input_dir):
+    """Analyze and describe the directory structure"""
+    max_depth = 0
+    total_dirs = 0
+    
+    for root, dirs, files in os.walk(input_dir):
+        depth = root.replace(input_dir, '').count(os.sep)
+        max_depth = max(max_depth, depth)
+        total_dirs += len(dirs)
+    
+    if max_depth == 0:
+        return "flat (no subdirectories)"
+    elif max_depth == 1:
+        return f"nested (1 level, {total_dirs} subdirectories)"
+    else:
+        return f"deeply nested ({max_depth} levels, {total_dirs} subdirectories)"
 
 
 def batch_convert(input_dir, output_dir, seq_len=SEQ_LEN, sampling_mode="2", skip_existing=False):
-
-    for label in sorted(os.listdir(input_dir)):
-        label_dir = os.path.join(input_dir, label)
-        if not os.path.isdir(label_dir):
-            continue
-
-        out_label = os.path.join(output_dir, label)
-        Path(out_label).mkdir(parents=True, exist_ok=True)
-
-        for f in sorted(os.listdir(label_dir)):
-            if f.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
-                in_path = os.path.join(label_dir, f)
-                out_path = os.path.join(out_label, f.replace('.mp4', '.npy'))
-                convert_video_to_npy(
-                    in_path, out_path,
-                    seq_len=seq_len,
-                    sampling_mode=sampling_mode,
-                    skip_existing=skip_existing
-                )
+    """
+    Convert all videos in input_dir to .npy files in output_dir.
+    
+    Preserves directory structure:
+    - input_dir/video.mp4 → output_dir/video.npy
+    - input_dir/a/video.mp4 → output_dir/a/video.npy
+    - input_dir/a/b/c/video.mp4 → output_dir/a/b/c/video.npy
+    """
+    
+    if not os.path.exists(input_dir):
+        logger.error(f"❌ Input directory does not exist: {input_dir}")
+        return
+    
+    # Analyze directory structure
+    structure = get_directory_structure_info(input_dir)
+    logger.info(f"📁 Directory structure: {structure}")
+    
+    # Find all videos recursively
+    videos = find_all_videos(input_dir)
+    
+    if len(videos) == 0:
+        logger.warning(f"⚠️ No video files found in {input_dir}")
+        logger.info(f"   Supported extensions: {VIDEO_EXTENSIONS}")
+        return
+    
+    logger.info(f"🎬 Found {len(videos)} video files")
+    
+    # Create output directory
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Convert each video
+    converted = 0
+    skipped = 0
+    failed = 0
+    
+    for i, (abs_path, rel_path) in enumerate(videos, 1):
+        # Build output path preserving directory structure
+        out_rel_path = replace_video_extension(rel_path)
+        out_abs_path = os.path.join(output_dir, out_rel_path)
+        
+        logger.info(f"[{i}/{len(videos)}] Processing: {rel_path}")
+        
+        result = convert_video_to_npy(
+            abs_path, out_abs_path,
+            seq_len=seq_len,
+            sampling_mode=sampling_mode,
+            skip_existing=skip_existing
+        )
+        
+        if result == "converted":
+            converted += 1
+        elif result == "skipped":
+            skipped += 1
+        else:
+            failed += 1
+    
+    # Summary
+    logger.info("=" * 50)
+    logger.info(f"📊 Summary:")
+    logger.info(f"   Total videos: {len(videos)}")
+    logger.info(f"   Converted: {converted}")
+    if skipped > 0:
+        logger.info(f"   Skipped (already exists): {skipped}")
+    if failed > 0:
+        logger.info(f"   Failed: {failed}")
+    logger.info(f"   Output directory: {output_dir}")
+    logger.info("=" * 50)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", default="data/raw")
-    parser.add_argument("--output_dir", default="data/npy")
-    parser.add_argument("--seq_len", type=int, default=SEQ_LEN)
-    parser.add_argument("--sampling_mode", default="2", choices=["1", "2"])
-    parser.add_argument("--skip_existing", action="store_true")
+    parser = argparse.ArgumentParser(
+        description="Convert videos to .npy keypoint sequences",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Directory Structure Support:
+  The script automatically handles any directory structure:
+  
+  Flat:
+    input/video1.mp4        → output/video1.npy
+    input/video2.mp4        → output/video2.npy
+  
+  Nested (1 level - typical for labeled data):
+    input/hello/vid1.mp4    → output/hello/vid1.npy
+    input/thanks/vid2.mp4   → output/thanks/vid2.npy
+  
+  Deeply nested (multiple levels):
+    input/train/hello/v1.mp4  → output/train/hello/v1.npy
+    input/test/thanks/v2.mp4  → output/test/thanks/v2.npy
+
+Examples:
+  # Basic usage
+  python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy
+
+  # With custom sequence length
+  python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --seq_len 30
+
+  # Skip already converted files
+  python -m src.preprocess.video2npy --input_dir data/raw --output_dir data/npy --skip_existing
+        """
+    )
+    parser.add_argument("--input_dir", default="data/raw", 
+                        help="Input directory containing videos (any structure)")
+    parser.add_argument("--output_dir", default="data/npy", 
+                        help="Output directory for .npy files (structure preserved)")
+    parser.add_argument("--seq_len", type=int, default=SEQ_LEN, 
+                        help=f"Sequence length (default: {SEQ_LEN})")
+    parser.add_argument("--sampling_mode", default="2", choices=["1", "2"], 
+                        help="Sampling mode: 1=uniform, 2=smart (default: 2)")
+    parser.add_argument("--skip_existing", action="store_true", 
+                        help="Skip already converted files")
     args = parser.parse_args()
 
     logger = setup_logger("video2npy")

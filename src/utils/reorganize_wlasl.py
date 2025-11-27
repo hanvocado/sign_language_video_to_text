@@ -4,12 +4,6 @@ train/<gloss>/, val/<gloss>/, test/<gloss>/
 
 Uses split information from WLASL_v0.3.json:
     'split' ∈ ['train', 'val', 'test']
-
-Usage:
-    python split_and_organize_wlasl.py --subset 100 \
-        --json data/wlasl/WLASL_v0.3.json \
-        --src_dir data/wlasl/videos \
-        --dst_dir data/wlasl/wlasl100
 """
 
 import os
@@ -26,7 +20,7 @@ def create_split_folders(dst_root, glosses):
             os.makedirs(os.path.join(dst_root, split, gloss), exist_ok=True)
 
 
-def main(subset, json_path, src_dir, dst_dir):
+def main(subset, json_path, src_dir, dst_dir, data_type):
     # Load JSON
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -49,8 +43,8 @@ def main(subset, json_path, src_dir, dst_dir):
         for inst in instances:
             vid = inst["video_id"]
             split_dir = inst["split"]  # 'train', 'val', or 'test'
-            src = os.path.join(src_dir, f"{vid}.mp4")
-            dst = os.path.join(dst_dir, split_dir, gloss, f"{vid}.mp4")
+            src = os.path.join(src_dir, f"{vid}.{data_type}")
+            dst = os.path.join(dst_dir, split_dir, gloss, f"{vid}.{data_type}")
 
             if not os.path.exists(src):
                 print(f"[WARNING] Missing video: {src}")
@@ -72,10 +66,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--subset", type=int, default=100, help="Number of glosses to include")
     parser.add_argument("--json", default="data/wlasl/WLASL_v0.3.json", help="Path to WLASL json")
-    parser.add_argument("--src_dir", default="data/wlasl/videos", help="Directory with all WLASL .mp4 videos")
+    parser.add_argument("--src_dir", default="data/wlasl/videos", help="Directory with all WLASL files (npy or mp4)")
+    parser.add_argument("--dst_dir", default="data/wlasl/wlasl100_npy", help="Destination directory for the subset")
+    parser.add_argument("--data_type", default="npy", choices=["npy", "mp4"], help="Type of source data files")
 
     args = parser.parse_args()
-
-    dst_dir = f"data/wlasl/wlasl{args.subset}"
     
-    main(args.subset, args.json, args.src_dir, dst_dir)
+    main(args.subset, args.json, args.src_dir, args.dst_dir, args.data_type)

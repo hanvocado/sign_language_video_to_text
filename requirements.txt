@@ -7,7 +7,7 @@ pandas
 scikit-learn
 joblib
 tqdm
-
+seaborn
 # Web framework
 flask>=2.0.0
 flask-socketio>=5.0.0
