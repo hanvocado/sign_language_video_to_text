@@ -42,28 +42,24 @@ sign-language-recognition/
   python -m src.preprocess.preprocess_video --input_dir data/wlvsl/raw_unprocessed --output_dir data/wlvsl/raw
   ```
 
-4. Split dataset into train/val/test:
+4. Convert tất cả video sang npy:
    ```bash
-   python -m src.preprocess.split_dataset --data_dir data/wlvsl/raw --output_dir data/wlvsl/splits
+   python -m src.preprocess.video2npy --input_dir data/wlvsl/raw --output_dir data/wlvsl/npy
    ```
 
-5. Convert tất cả video sang npy (pose+hands):
+5. Split dataset into train/val/test:
    ```bash
-   python -m src.preprocess.video2npy --input_dir data/wlvsl/splits/train --output_dir data/wlvsl/npy/train --seq_len 30 --sampling_mode 2
-
-   python -m src.preprocess.video2npy --input_dir data/wlvsl/splits/val --output_dir data/wlvsl/npy/val --seq_len 30 --sampling_mode 2
-
-   python -m src.preprocess.video2npy --input_dir data/wlvsl/splits/test --output_dir data/wlvsl/npy/test --seq_len 30 --sampling_mode 2
+   python -m src.preprocess.split_dataset --data_dir data/wlvsl/npy --output_dir data/wlvsl/splits
    ```
 
 6. Huấn luyện và đánh giá:
    ```bash
-   python -m src.model.train --data_dir data/wlvsl/npy --source npy --seq_len 30 --ckpt_dir models/checkpoints/vsl_v1
+   python -m src.model.train --data_dir data/wlvsl/npy --source npy --ckpt_dir models/checkpoints/vsl_v1
    ```
 
 7. Realtime inference:
    ```bash
-   python -m src.infer_realtime --ckpt models/checkpoints/vsl_v1/best.pth --label_map models/checkpoints/vsl_v1/label_map.json --seq_len 30
+   python -m src.infer_realtime --ckpt models/checkpoints/vsl_v1/best.pth --label_map models/checkpoints/vsl_v1/label_map.json
    ```
 
 8. **Web Application (Webapp):**

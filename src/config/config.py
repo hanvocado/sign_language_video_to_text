@@ -19,7 +19,7 @@ for p in [DATA_DIR, RAW_DIR, NPY_DIR, SPLIT_DIR, MODEL_DIR, CKPT_DIR]:
 # Feature dimensions after extracting Pose(33*3) + LHand(21*3) + RHand(21*3)
 # Updated: removed face landmarks, added pose landmarks
 FEATURE_DIM = 225  # 99 + 63 + 63 = 225
-SEQ_LEN = 30
+SEQ_LEN = 25
 BATCH_SIZE = 16
 LR = 1e-3
 EPOCHS = 200
