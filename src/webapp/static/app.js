@@ -3,6 +3,14 @@
  * Real-time frame capture with full debug logging
  */
 
+// Initialize smooth scroll snap behavior
+window.addEventListener('load', function() {
+    // Ensure page starts at top
+    window.scrollTo(0, 0);
+    // Enable scroll snap
+    document.documentElement.style.scrollSnapType = 'y mandatory';
+});
+
 const socket = io();
 let video = null;
 let canvas = null;
