@@ -23,12 +23,7 @@ class ModelConfig:
 class WebappConfig:
     """Real-time webapp specific configuration (optimized for speed)"""
     
-    # Reduce sequence length for faster inference
-    SEQ_LEN = 18  # Reduced from 25 for real-time performance
-    
-    # Use simpler sampling mode for speed
+    SEQ_LEN = 25  
     SAMPLING_MODE = "1"  # Mode 1 is faster than mode 2
-    
-    # Confidence threshold
-    MIN_CONFIDENCE = 0.50  # Increased from 0.35 for better accuracy
+    MIN_CONFIDENCE = 0.50  
 
