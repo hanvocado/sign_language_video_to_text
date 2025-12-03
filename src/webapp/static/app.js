@@ -22,8 +22,8 @@ let totalPredictions = 0;
 let framesSent = 0;
 let recognizedSequence = []; // Track all recognized gestures
 
-// FIXED: 10 FPS (not 20!)
-const FPS = 10;
+// const FPS = 10;
+const FPS = 25;
 const FRAME_INTERVAL = 1000 / FPS;
 let lastFrameTime = 0;
 
