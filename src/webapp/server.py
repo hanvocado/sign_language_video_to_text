@@ -48,11 +48,11 @@ logging.getLogger('mediapipe').setLevel(logging.ERROR)
 # CONFIGURATION
 # ===================================================================
 
-BUFFER_SIZE = 15  # Increased from 10 for more stable predictions
-MIN_CONFIDENCE = 0.55
-INFERENCE_INTERVAL = 0.3  # Increased from 0.15 to 300ms for stability
-SMOOTHING_WINDOW = 5  # Increased from 3 for more voting rounds
-MIN_VOTES_FOR_RESULT = 2  # Require at least 2 same votes
+BUFFER_SIZE = 15  # Reduced from 15 - faster buffer fill (480ms @ 25FPS)
+MIN_CONFIDENCE = 0.52  # Slightly higher to filter borderline predictions
+INFERENCE_INTERVAL = 0.15  # Run inference every 150ms
+SMOOTHING_WINDOW = 4  # Voting window size
+MIN_VOTES_FOR_RESULT = 3  # Increased from 2 to 3 - need stronger consensus (75% in window of 4)
 
 # ===================================================================
 # FLASK APP
@@ -106,7 +106,7 @@ latest_prediction = {
 
 last_emitted_label = None  # Track last emitted label to avoid duplicates
 last_emit_time = 0  # Track when last prediction was emitted
-DUPLICATE_PREVENTION_TIMEOUT = 2.5  # Seconds before allowing same gesture again
+DUPLICATE_PREVENTION_TIMEOUT = 3.5  # Increased from 2.5 - longer cooldown to prevent false secondary prediction
 
 # ===================================================================
 # MODEL LOADING
