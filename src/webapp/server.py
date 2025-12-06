@@ -104,9 +104,9 @@ latest_prediction = {
     'timestamp': 0
 }
 
-last_emitted_label = None  # Track last emitted label to avoid duplicates
-last_emit_time = 0  # Track when last prediction was emitted
-DUPLICATE_PREVENTION_TIMEOUT = 3.5  # Increased from 2.5 - longer cooldown to prevent false secondary prediction
+last_emitted_label = None  
+DUPLICATE_PREVENTION_TIMEOUT = 0.5  
+inference_blocked_until = 0  
 
 # ===================================================================
 # MODEL LOADING
@@ -178,11 +178,18 @@ def mediapipe_worker():
 
 def run_inference():
     """Run model inference on buffered frames"""
-    global is_inferring, frame_buffer, prediction_history, latest_prediction, last_emitted_label, last_emit_time
+    global is_inferring, frame_buffer, prediction_history, latest_prediction, last_emitted_label, last_emit_time, inference_blocked_until
     
     is_inferring = True
     
     try:
+        # Skip inference if blocked (after recent emission)
+        current_time = time.time()
+        if current_time < inference_blocked_until:
+            is_inferring = False
+            logger.debug(f"Inference blocked for {inference_blocked_until - current_time:.2f}s")
+            return
+        
         if len(frame_buffer) < BUFFER_SIZE:
             is_inferring = False
             return
@@ -228,9 +235,7 @@ def run_inference():
                 voted_label = max(counts, key=counts.get)
                 vote_count = counts[voted_label]
                 
-                # STRICT: Only emit if we have at least MIN_VOTES_FOR_RESULT of the same label
                 if vote_count >= MIN_VOTES_FOR_RESULT:
-                    # Check if this is a duplicate emission
                     current_time = time.time()
                     is_duplicate = (voted_label == last_emitted_label and 
                                   (current_time - last_emit_time) < DUPLICATE_PREVENTION_TIMEOUT)
@@ -240,7 +245,7 @@ def run_inference():
                         voted_confs = [c for l, c in prediction_history if l == voted_label]
                         avg_conf = np.mean(voted_confs)
                         
-                        logger.info(f"✅ VOTED: {voted_label} ({avg_conf:.3f}) | Votes: {vote_count}/{len(prediction_history)}")
+                        logger.info(f"VOTED: {voted_label} ({avg_conf:.3f}) | Votes: {vote_count}/{len(prediction_history)}")
                         
                         with inference_lock:
                             latest_prediction['label'] = voted_label
@@ -259,12 +264,16 @@ def run_inference():
                         last_emitted_label = voted_label
                         last_emit_time = current_time
                         
-                        # Clear prediction history to avoid immediate re-voting
+                        # Block inference for 1 second to prevent spam from continuous buffer updates
+                        inference_blocked_until = current_time + 1.0
+                        
+                        # Clear BOTH history and buffer to prevent spam from repeated inference
                         prediction_history.clear()
-                        logger.info(f"🔄 Cleared history (next same gesture allowed in {DUPLICATE_PREVENTION_TIMEOUT}s)")
+                        frame_buffer.clear()
+                        logger.info(f"RESULT EMITTED - Blocked inference for 1.0s to prevent spam")
                     else:
-                        logger.debug(f"🚫 Duplicate blocked: {voted_label} (time since last: {current_time - last_emit_time:.2f}s)")
-                        # Still clear history even if duplicate to prevent spam
+                        # Suppress duplicate
+                        logger.debug(f"Duplicate suppressed: {voted_label} (time since last: {current_time - last_emit_time:.2f}s)")
                         prediction_history.clear()
                 else:
                     logger.debug(f"⏳ Waiting for consensus: {voted_label} has {vote_count}/{MIN_VOTES_FOR_RESULT} votes")

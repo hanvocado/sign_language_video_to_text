@@ -64,7 +64,7 @@ socket.on('prediction', function (data) {
     const buffer = data.buffer_size || '?';
     
     // Update UI
-    document.getElementById('prediction-label').textContent = `✅ ${label}`;
+    document.getElementById('prediction-label').textContent = `${label}`;
     document.getElementById('prediction-confidence').textContent = `Confidence: ${confidence}%`;
     document.getElementById('prediction-frames').textContent = `Votes: ${votes} | Buffer: ${buffer}`;
     
@@ -106,13 +106,13 @@ function updateStatusDisplay() {
     let statusClass = 'state-waiting';
     
     if (isInferring) {
-        statusText = '🧠 Inferring...';
+        statusText = 'Inferring...';
         statusClass = 'state-recording';
     } else if (isReady) {
-        statusText = '✅ Ready';
+        statusText = 'Ready';
         statusClass = 'state-recording';
     } else {
-        statusText = `📄 Buffer: ${bufferSize}/10`;
+        statusText = `Buffer: ${bufferSize}/10`;
         statusClass = 'state-waiting';
     }
     
@@ -120,7 +120,7 @@ function updateStatusDisplay() {
     stateEl.className = statusClass;
     
     document.getElementById('segment-size').textContent = bufferSize;
-    document.getElementById('still-count').textContent = isInferring ? '⏳' : '✅';
+    document.getElementById('still-count').textContent = isInferring ? 'Processing' : 'Ready';
 }
 
 function addToHistory(label, confidence) {
@@ -246,7 +246,7 @@ function captureFrames() {
 // ===================================================================
 
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('🚀 Vietnamese Sign Language Recognition - Web App');
+    console.log('Vietnamese Sign Language Recognition - Web App');
     console.log('Configuration: 10 FPS, 10-frame buffer, 55% min confidence');
     
     initializeCamera();
