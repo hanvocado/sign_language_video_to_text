@@ -247,7 +247,7 @@ function captureFrames() {
 
 document.addEventListener('DOMContentLoaded', function () {
     console.log('Vietnamese Sign Language Recognition - Web App');
-    console.log('Configuration: 10 FPS, 10-frame buffer, 55% min confidence');
+    console.log('Configuration: 10 FPS, 15-frame buffer, 55% min confidence');
     
     initializeCamera();
 });
