@@ -197,7 +197,7 @@ async function initializeCamera() {
 function captureFrames() {
     const now = Date.now();
     
-    // Capture every FRAME_INTERVAL ms (100ms for 10 FPS)
+    // Capture every FRAME_INTERVAL ms (determined by FPS setting)
     if (now - lastFrameTime >= FRAME_INTERVAL) {
         if (isConnected && video && video.readyState === video.HAVE_ENOUGH_DATA) {
             try {
